@@ -172,6 +172,11 @@ a { color: var(--blue); word-break: break-all; }
   padding: 16px 10px 8px;
   margin: 16px 0 10px;
 }
+/* 單數區塊：綠框 + 淡綠底色 */
+.sub-block.sub-block-alt {
+  border-color: #86EFAC;
+  background: #F0FDF4;
+}
 .sub-block-tag {
   position: absolute;
   top: -11px;
@@ -187,6 +192,10 @@ a { color: var(--blue); word-break: break-all; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   z-index: 2;
   white-space: nowrap;
+}
+.sub-block.sub-block-alt .sub-block-tag {
+  border-color: var(--green);
+  color: var(--green);
 }
 .sub-block .item {
   margin: 6px 0;

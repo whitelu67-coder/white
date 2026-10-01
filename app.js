@@ -511,11 +511,14 @@
       g.appendChild(el('div', 'group-title', c.label + '（' + inCat.length + '）'));
       const subs = {};
       inCat.forEach(function (it) { const k = it.s.subcategory || ''; (subs[k] = subs[k] || []).push(it); });
+      let blockCount = 0;
       Object.keys(subs).sort(function (a, b) { return (a === '') - (b === '') || a.localeCompare(b, 'zh-Hant'); }).forEach(function (sub) {
         const items = subs[sub].sort(function (a, b) { return a.s.name.localeCompare(b.s.name, 'zh-Hant'); });
         if (sub) {
-          // 有標籤：區塊容器，標籤置於左上角
-          const block = el('div', 'sub-block');
+          blockCount++;
+          // 每個分類底下：第 1 個綠色、第 2 個灰色、第 3 個綠色...
+          const isOdd = blockCount % 2 === 1;
+          const block = el('div', 'sub-block' + (isOdd ? ' sub-block-alt' : ''));
           block.appendChild(el('div', 'sub-block-tag', '🏷️ ' + sub + '（' + items.length + '）'));
           items.forEach(function (it) {
             block.appendChild(createItemButton(it));
