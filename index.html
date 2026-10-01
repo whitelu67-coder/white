@@ -7,7 +7,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.line.me https://*.line-scdn.net; frame-src https://*.line.me; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
-  <title>White</title>
+  <title>密碼本</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -27,45 +27,6 @@
       <button id="message-relogin" class="btn btn-outline blue narrow" type="button" hidden>重新登入 LINE</button>
     </section>
 
-    <!-- 第一次設定主密碼 -->
-    <section id="screen-setup" class="screen" hidden>
-      <div class="card">
-        <h1>🔐 建立密碼本</h1>
-        <p class="muted">設定一組主密碼。之後每次打開密碼本都要輸入，全家共用同一組。</p>
-        <label class="field">主密碼
-          <input id="setup-pw" type="password" autocomplete="new-password" minlength="8">
-        </label>
-        <div class="strength"><div id="setup-strength-bar"></div></div>
-        <p id="setup-strength-text" class="hint"></p>
-        <label class="field">再輸入一次
-          <input id="setup-pw2" type="password" autocomplete="new-password">
-        </label>
-        <label class="field">主密碼提示（選填）
-          <input id="setup-hint" type="text" maxlength="100" placeholder="例如：第一次出國的城市＋年份">
-        </label>
-        <p class="hint">💡 提示會顯示在解鎖畫面，拿到你 LINE 的人也看得到，請寫只有家人懂的事，不要直接寫出主密碼。</p>
-        <p id="setup-error" class="error" hidden></p>
-        <button id="setup-submit" class="btn btn-primary" type="button">下一步：產生救援碼</button>
-      </div>
-    </section>
-
-    <!-- 救援碼（建立時、用救援碼重設後、重新產生時都會出現） -->
-    <section id="screen-recovery-code" class="screen" hidden>
-      <div class="card">
-        <h1>🆘 救援碼</h1>
-        <p class="muted">忘記主密碼時，可以用這組救援碼打開密碼本、重新設定主密碼。</p>
-        <div id="rc-code" class="recovery-code mono"></div>
-        <div class="warn">
-          ✍️ <b>請抄在紙上</b>，放在家裡安全的地方（例如跟重要文件放一起）。<br>
-          不要存在手機、LINE 或雲端裡。<br>
-          這組救援碼<b>只會顯示這一次</b>，用過一次就會換新的一組。
-        </div>
-        <label class="check"><input id="rc-agree" type="checkbox"> 我已經把救援碼抄在紙上</label>
-        <p id="rc-error" class="error" hidden></p>
-        <button id="rc-done" class="btn btn-primary" type="button">完成</button>
-      </div>
-    </section>
-
     <!-- 解鎖 -->
     <section id="screen-unlock" class="screen" hidden>
       <div class="card">
@@ -80,36 +41,6 @@
           <p id="unlock-error" class="error" hidden></p>
           <button id="unlock-submit" class="btn btn-primary" type="submit">解鎖</button>
         </form>
-        <button id="unlock-forgot" class="link-btn center-text" type="button">忘記主密碼？用救援碼打開</button>
-      </div>
-    </section>
-
-    <!-- 用救援碼打開 -->
-    <section id="screen-recover" class="screen" hidden>
-      <div class="card">
-        <h1>🆘 用救援碼打開</h1>
-        <p class="muted">輸入建立密碼本時抄下的救援碼（30 個字，大小寫、連字號都沒關係）。打開後要設定新的主密碼。</p>
-        <label class="field">救援碼
-          <input id="rec-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX">
-        </label>
-        <p class="hint">⚠️ 使用救援碼時，家人會收到 LINE 通知。</p>
-        <p id="rec-error" class="error" hidden></p>
-        <button id="rec-submit" class="btn btn-primary" type="button">打開</button>
-        <button id="rec-back" class="link-btn center-text" type="button">← 回到輸入主密碼</button>
-      </div>
-    </section>
-
-    <!-- 設定新的主密碼（用救援碼打開之後） -->
-    <section id="screen-newmaster" class="screen" hidden>
-      <div class="card">
-        <h1>🔑 設定新的主密碼</h1>
-        <p class="muted">設定好之後會再產生一組新的救援碼，舊的救援碼就作廢了。</p>
-        <label class="field">新的主密碼<input id="nm-pw" type="password" autocomplete="new-password"></label>
-        <div class="strength"><div id="nm-strength-bar"></div></div>
-        <label class="field">再輸入一次<input id="nm-pw2" type="password" autocomplete="new-password"></label>
-        <label class="field">主密碼提示（選填）<input id="nm-hint" type="text" maxlength="100"></label>
-        <p id="nm-error" class="error" hidden></p>
-        <button id="nm-submit" class="btn btn-primary" type="button">下一步：產生新的救援碼</button>
       </div>
     </section>
 
@@ -118,7 +49,6 @@
       <header class="topbar">
         <h1>🔐 密碼本</h1>
         <div class="topbar-actions">
-          <button id="btn-settings" class="icon-btn" type="button" aria-label="設定">⚙️</button>
           <button id="btn-lock" class="icon-btn" type="button" aria-label="立即鎖定">🔒</button>
         </div>
       </header>
@@ -196,55 +126,6 @@
       <p class="hint">⚠️ 網址和備註會跟名稱一起顯示在清單上，請不要寫密碼或安全提問的答案。</p>
       <p id="e-error" class="error" hidden></p>
       <button id="e-save" class="btn btn-primary" type="button">儲存</button>
-    </div>
-  </div>
-
-  <!-- 設定 -->
-  <div id="sheet-settings" class="sheet" hidden>
-    <div class="sheet-body">
-      <div class="sheet-head">
-        <h2>⚙️ 設定</h2>
-        <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
-      </div>
-
-      <h3>更換主密碼</h3>
-      <p class="hint">換完之後，記得告訴家人新的主密碼。家人會收到 LINE 通知。</p>
-      <label class="field">目前的主密碼<input id="s-old" type="password" autocomplete="current-password"></label>
-      <label class="field">新的主密碼<input id="s-new" type="password" autocomplete="new-password"></label>
-      <div class="strength"><div id="s-strength-bar"></div></div>
-      <label class="field">再輸入一次<input id="s-new2" type="password" autocomplete="new-password"></label>
-      <label class="field">新的提示（選填，留空就維持原本的）<input id="s-new-hint" type="text" maxlength="100"></label>
-      <p id="s-error" class="error" hidden></p>
-      <button id="s-rekey" class="btn btn-outline blue" type="button">更換主密碼</button>
-
-      <h3>主密碼提示</h3>
-      <p id="s-hint-now" class="hint"></p>
-      <label class="field">新的提示（留空＝不顯示提示）<input id="s-hint" type="text" maxlength="100"></label>
-      <label class="field">主密碼（用來確認提示不會洩漏主密碼）<input id="s-hint-pw" type="password" autocomplete="current-password"></label>
-      <p id="s-hint-error" class="error" hidden></p>
-      <button id="s-hint-save" class="btn btn-outline blue" type="button">儲存提示</button>
-
-      <h3>救援碼</h3>
-      <p class="hint">救援碼遺失、或擔心被別人看到時，可以重新產生一組；舊的會作廢。</p>
-      <label class="field">主密碼<input id="s-rc-pw" type="password" autocomplete="current-password"></label>
-      <p id="s-rc-error" class="error" hidden></p>
-      <button id="s-rc-new" class="btn btn-outline orange" type="button">🆘 重新產生救援碼</button>
-
-      <h3>備份</h3>
-      <p class="hint">備份檔一樣是加密的，要有<b>備份當時的主密碼</b>才能還原。還原會取代目前全部的資料（主密碼、救援碼不變）。</p>
-      <div class="row">
-        <button id="s-export" class="btn btn-outline blue" type="button">⬇️ 匯出備份</button>
-        <label class="btn btn-outline orange file-btn">⬆️ 從備份還原<input id="s-import" type="file" accept="application/json,.json" hidden></label>
-      </div>
-      <p id="s-backup-msg" class="hint"></p>
-
-      <h3>存取紀錄</h3>
-      <button id="s-log-load" class="btn btn-outline purple" type="button">查看最近 100 筆</button>
-      <ul id="s-log" class="log"></ul>
-
-      <h3>緊急鎖定</h3>
-      <p class="hint">懷疑有人盜用時使用。按下後所有人都打不開，要到 GAS 刪除 VAULT_LOCKED 才能解除。</p>
-      <button id="s-lock" class="btn btn-danger" type="button">🚨 緊急鎖定密碼本</button>
     </div>
   </div>
 
