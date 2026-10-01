@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>更換主密碼</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    body { padding: 16px; }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    textarea.out { width: 100%; min-height: 120px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; }
+    .steps { line-height: 1.8; padding-left: 20px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🔑 更換主密碼</h1>
+      <p class="muted">在自己的電腦上產生新的 GAS 指令碼屬性 <b>VAULT_META</b>。全部在這個網頁裡計算，不會連網路、不會送出主密碼。
+        已經存的帳密都會保留，不用重新輸入。</p>
+
+      <label class="field">目前的 VAULT_META（從 GAS 指令碼屬性整段複製）
+        <textarea id="meta" class="out" spellcheck="false"></textarea>
+      </label>
+      <label class="field">目前的主密碼<input id="old" type="password" autocomplete="off"></label>
+      <label class="field">新的主密碼<input id="pw" type="password" autocomplete="new-password"></label>
+      <div class="strength"><div id="strength-bar"></div></div>
+      <p class="hint">至少 8 個字，純數字、純英文都可以；越長越安全（強度條只是參考）。</p>
+      <label class="field">再輸入一次<input id="pw2" type="password" autocomplete="new-password"></label>
+      <label class="field">主密碼提示（選填，用來檢查有沒有洩漏；要另外貼到 VAULT_HINT）<input id="hint" type="text" maxlength="100"></label>
+      <p class="hint">⚠️ 沒有救援碼：忘記主密碼，已存的帳密就救不回來。</p>
+      <p id="error" class="error" hidden></p>
+      <button id="go" class="btn btn-primary" type="button">產生新的 VAULT_META</button>
+    </div>
+
+    <div class="card" id="result" hidden>
+      <h2>✅ 產生好了</h2>
+      <p id="result-note" class="warn"></p>
+      <h3>VAULT_META</h3>
+      <textarea id="out" class="out" readonly spellcheck="false"></textarea>
+      <button id="copy" class="btn btn-outline blue" type="button">📋 複製 VAULT_META</button>
+      <ol class="steps">
+        <li>打開密碼本的 GAS →「專案設定（⚙️）→ 指令碼屬性」</li>
+        <li><b>先把現在的 VAULT_META 複製到記事本備份</b>（貼錯還能貼回去）</li>
+        <li>把 <b>VAULT_META</b> 的值整段換成上面這串 → 儲存</li>
+        <li>如果要換提示：<b>VAULT_HINT</b> 改成新的提示</li>
+        <li>用手機打開密碼本，用新主密碼確認帳密都看得到，再刪掉記事本裡的備份</li>
+        <li>完成後關掉這個網頁</li>
+      </ol>
+    </div>
+  </div>
+
+  <script src="../vault-crypto.js"></script>
+  <script src="master-tool.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const $ = function (id) { return document.getElementById(id); };
+
+      function setError(t) { $('error').textContent = t || ''; $('error').hidden = !t; }
+
+      async function go() {
+        setError('');
+        if (!window.crypto || !crypto.subtle) return setError('這個瀏覽器不支援加密功能，請用 Chrome 或 Edge 開啟');
+        const pw = $('pw').value;
+        const err = MasterTool.checkNewMaster(pw, $('pw2').value, $('hint').value.trim());
+        if (err) return setError(err);
+        const btn = $('go');
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '計算中…（約幾秒）';
+        try {
+          const r = await MasterTool.changeMaster($('meta').value, $('old').value, pw);
+          $('out').value = r.meta;
+          $('result-note').textContent = '主密碼已更換，記得告訴家人新的主密碼。' + (r.removedRecovery ? '（舊的救援碼資料也一起清掉了，舊救援碼已經沒用）' : '');
+          $('result').hidden = false;
+          ['old', 'pw', 'pw2'].forEach(function (id) { $(id).value = ''; });
+          $('strength-bar').className = '';
+          $('result').scrollIntoView({ behavior: 'smooth' });
+        } catch (e) {
+          setError(e.message || '發生錯誤');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      }
+
+      $('pw').addEventListener('input', function () { const p = $('pw').value; $('strength-bar').className = p ? 's' + VaultCrypto.passwordStrength(p) : ''; });
+      $('go').addEventListener('click', go);
+      $('copy').addEventListener('click', async function () {
+        try { await navigator.clipboard.writeText($('out').value); } catch (e) { $('out').select(); document.execCommand('copy'); }
+        $('copy').textContent = '✅ 已複製';
+        setTimeout(function () { $('copy').textContent = '📋 複製 VAULT_META'; }, 2000);
+      });
+    })();
+  </script>
+</body>
+</html>
