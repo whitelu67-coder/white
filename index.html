@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
   <title>密碼本</title>
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <main id="app">
@@ -147,11 +147,19 @@
     </div>
   </div>
 
+  <!-- 全螢幕遮罩 Loading -->
+  <div id="load-mask" class="load-mask" hidden>
+    <div class="load-mask-card">
+      <div class="spinner"></div>
+      <div id="load-mask-text" class="load-mask-text">處理中…</div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
 
   <script src="config.js"></script>
   <script src="vault-crypto.js"></script>
   <script src="vendor/liff-sdk-2.31.0.js" integrity="sha384-T6WhT96rkehAFkTtmiRZ60sehxj4zgbifvzi7oGH792T3NN++f2rCvyb/WrHAz2D"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

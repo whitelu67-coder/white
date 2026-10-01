@@ -284,3 +284,18 @@ a { color: var(--blue); word-break: break-all; }
 .dlg-msg { font-size: 15px; color: var(--text); line-height: 1.5; white-space: pre-wrap; margin-bottom: 20px; }
 .dlg-actions { display: flex; gap: 10px; }
 .dlg-actions .btn { margin-top: 0; padding: 10px 14px; font-size: 15px; }
+
+/* 全螢幕等待遮罩 */
+.load-mask {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px); z-index: 120;
+  display: flex; align-items: center; justify-content: center;
+}
+.load-mask-card {
+  background: var(--card); padding: 22px 28px; border-radius: 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25); min-width: 140px;
+}
+.load-mask-text {
+  font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: 0.5px;
+}

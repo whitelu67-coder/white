@@ -136,6 +136,15 @@
     });
   }
 
+  function showMask(text) {
+    $('load-mask-text').textContent = text || '處理中…';
+    $('load-mask').hidden = false;
+  }
+
+  function hideMask() {
+    $('load-mask').hidden = true;
+  }
+
   function openSheet(id) { $(id).hidden = false; }
   function closeSheet(id) {
     $(id).hidden = true;
@@ -591,6 +600,7 @@
     if (!d) return;
     const ok = await showConfirm('確定要刪除「' + d.item.s.name + '」嗎？\n刪除後無法復原。', '刪除項目');
     if (!ok) return;
+    showMask('刪除中…');
     try {
       await api('deleteEntry', { id: d.item.id, rev: d.item.rev });
       state.items = state.items.filter(function (x) { return x.id !== d.item.id; });
@@ -599,6 +609,8 @@
       toast('已刪除');
     } catch (e) {
       handleSaveError(e);
+    } finally {
+      hideMask();
     }
   }
 
@@ -727,16 +739,22 @@
     if (state.busy) return;
     state.busy = true;
     const b = $(btnId);
-    const orig = b.textContent;
-    b.disabled = true;
-    b.textContent = text;
+    const orig = b ? b.textContent : '';
+    if (b) {
+      b.disabled = true;
+      b.textContent = text;
+    }
+    showMask(text || '處理中…');
     try {
       await fn();
     } catch (e) {
       if (!e.handled) toast(e.message || '發生錯誤');
     } finally {
-      b.disabled = false;
-      b.textContent = orig;
+      if (b) {
+        b.disabled = false;
+        b.textContent = orig;
+      }
+      hideMask();
       state.busy = false;
     }
   }
