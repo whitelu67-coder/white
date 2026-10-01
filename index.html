@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- 內容安全政策：只能載入自己網站的程式，只能連到 LINE 和密碼本的 GAS；不允許內嵌程式碼 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.line.me https://*.line-scdn.net; frame-src https://*.line.me; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>密碼本</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <!-- 載入中 -->
+    <section id="screen-loading" class="screen center">
+      <div class="spinner"></div>
+      <p id="loading-text">正在確認身分…</p>
+    </section>
+
+    <!-- 錯誤、沒有權限、緊急鎖定 -->
+    <section id="screen-message" class="screen center" hidden>
+      <div class="big-icon" id="message-icon">🚫</div>
+      <h2 id="message-title"></h2>
+      <p id="message-text" class="muted pre"></p>
+      <button id="message-retry" class="btn btn-outline blue narrow" type="button" hidden>重新整理</button>
+      <button id="message-relogin" class="btn btn-outline blue narrow" type="button" hidden>重新登入 LINE</button>
+    </section>
+
+    <!-- 第一次設定主密碼 -->
+    <section id="screen-setup" class="screen" hidden>
+      <div class="card">
+        <h1>🔐 建立密碼本</h1>
+        <p class="muted">設定一組主密碼。之後每次打開密碼本都要輸入，全家共用同一組。</p>
+        <label class="field">主密碼
+          <input id="setup-pw" type="password" autocomplete="new-password" minlength="8">
+        </label>
+        <div class="strength"><div id="setup-strength-bar"></div></div>
+        <p id="setup-strength-text" class="hint"></p>
+        <label class="field">再輸入一次
+          <input id="setup-pw2" type="password" autocomplete="new-password">
+        </label>
+        <label class="field">主密碼提示（選填）
+          <input id="setup-hint" type="text" maxlength="100" placeholder="例如：第一次出國的城市＋年份">
+        </label>
+        <p class="hint">💡 提示會顯示在解鎖畫面，拿到你 LINE 的人也看得到，請寫只有家人懂的事，不要直接寫出主密碼。</p>
+        <p id="setup-error" class="error" hidden></p>
+        <button id="setup-submit" class="btn btn-primary" type="button">下一步：產生救援碼</button>
+      </div>
+    </section>
+
+    <!-- 救援碼（建立時、用救援碼重設後、重新產生時都會出現） -->
+    <section id="screen-recovery-code" class="screen" hidden>
+      <div class="card">
+        <h1>🆘 救援碼</h1>
+        <p class="muted">忘記主密碼時，可以用這組救援碼打開密碼本、重新設定主密碼。</p>
+        <div id="rc-code" class="recovery-code mono"></div>
+        <div class="warn">
+          ✍️ <b>請抄在紙上</b>，放在家裡安全的地方（例如跟重要文件放一起）。<br>
+          不要存在手機、LINE 或雲端裡。<br>
+          這組救援碼<b>只會顯示這一次</b>，用過一次就會換新的一組。
+        </div>
+        <label class="check"><input id="rc-agree" type="checkbox"> 我已經把救援碼抄在紙上</label>
+        <p id="rc-error" class="error" hidden></p>
+        <button id="rc-done" class="btn btn-primary" type="button">完成</button>
+      </div>
+    </section>
+
+    <!-- 解鎖 -->
+    <section id="screen-unlock" class="screen" hidden>
+      <div class="card">
+        <h1>🔐 密碼本</h1>
+        <p class="muted">請輸入主密碼</p>
+        <form id="unlock-form" autocomplete="off">
+          <label class="field">主密碼
+            <input id="unlock-pw" type="password" autocomplete="current-password">
+          </label>
+          <button id="unlock-hint-btn" class="link-btn" type="button" hidden>💡 顯示提示</button>
+          <p id="unlock-hint" class="hint-box" hidden></p>
+          <p id="unlock-error" class="error" hidden></p>
+          <button id="unlock-submit" class="btn btn-primary" type="submit">解鎖</button>
+        </form>
+        <button id="unlock-forgot" class="link-btn center-text" type="button">忘記主密碼？用救援碼打開</button>
+      </div>
+    </section>
+
+    <!-- 用救援碼打開 -->
+    <section id="screen-recover" class="screen" hidden>
+      <div class="card">
+        <h1>🆘 用救援碼打開</h1>
+        <p class="muted">輸入建立密碼本時抄下的救援碼（30 個字，大小寫、連字號都沒關係）。打開後要設定新的主密碼。</p>
+        <label class="field">救援碼
+          <input id="rec-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX">
+        </label>
+        <p class="hint">⚠️ 使用救援碼時，家人會收到 LINE 通知。</p>
+        <p id="rec-error" class="error" hidden></p>
+        <button id="rec-submit" class="btn btn-primary" type="button">打開</button>
+        <button id="rec-back" class="link-btn center-text" type="button">← 回到輸入主密碼</button>
+      </div>
+    </section>
+
+    <!-- 設定新的主密碼（用救援碼打開之後） -->
+    <section id="screen-newmaster" class="screen" hidden>
+      <div class="card">
+        <h1>🔑 設定新的主密碼</h1>
+        <p class="muted">設定好之後會再產生一組新的救援碼，舊的救援碼就作廢了。</p>
+        <label class="field">新的主密碼<input id="nm-pw" type="password" autocomplete="new-password"></label>
+        <div class="strength"><div id="nm-strength-bar"></div></div>
+        <label class="field">再輸入一次<input id="nm-pw2" type="password" autocomplete="new-password"></label>
+        <label class="field">主密碼提示（選填）<input id="nm-hint" type="text" maxlength="100"></label>
+        <p id="nm-error" class="error" hidden></p>
+        <button id="nm-submit" class="btn btn-primary" type="button">下一步：產生新的救援碼</button>
+      </div>
+    </section>
+
+    <!-- 清單 -->
+    <section id="screen-list" class="screen screen-list" hidden>
+      <header class="topbar">
+        <h1>🔐 密碼本</h1>
+        <div class="topbar-actions">
+          <button id="btn-settings" class="icon-btn" type="button" aria-label="設定">⚙️</button>
+          <button id="btn-lock" class="icon-btn" type="button" aria-label="立即鎖定">🔒</button>
+        </div>
+      </header>
+      <div class="searchbar">
+        <input id="search" type="search" placeholder="🔍 搜尋（例如：台新）" autocomplete="off">
+      </div>
+      <nav id="chips" class="chips"></nav>
+      <div id="list" class="list"></div>
+      <button id="btn-add" class="fab" type="button">＋ 新增</button>
+    </section>
+  </main>
+
+  <!-- 詳細資料（點開才下載並解密帳號密碼） -->
+  <div id="sheet-detail" class="sheet" hidden>
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="d-name"></h2>
+        <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
+      </div>
+      <p id="d-cat" class="muted"></p>
+      <div class="kv">
+        <div class="kv-label">帳號</div>
+        <div class="kv-value"><span id="d-user" class="mono">解密中…</span>
+          <button id="d-copy-user" class="mini" type="button">📋</button></div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">密碼</div>
+        <div class="kv-value"><span id="d-pass" class="mono">••••••••</span>
+          <button id="d-reveal" class="mini" type="button">👁️</button>
+          <button id="d-copy-pass" class="mini" type="button">📋</button></div>
+      </div>
+      <div class="kv" id="d-url-row">
+        <div class="kv-label">網址</div>
+        <div class="kv-value"><a id="d-url" href="#" rel="noopener noreferrer"></a></div>
+      </div>
+      <div class="kv" id="d-note-row">
+        <div class="kv-label">備註</div>
+        <div class="kv-value"><span id="d-note" class="pre"></span></div>
+      </div>
+      <p id="d-meta" class="hint"></p>
+      <div class="row">
+        <button id="d-edit" class="btn btn-outline green" type="button">✏️ 修改</button>
+        <button id="d-delete" class="btn btn-outline red" type="button">🗑️ 刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增、修改 -->
+  <div id="sheet-edit" class="sheet" hidden>
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="e-title">新增</h2>
+        <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
+      </div>
+      <label class="field">名稱 *<input id="e-name" type="text" maxlength="60" placeholder="例如：台新 Richart"></label>
+      <div class="row">
+        <label class="field">分類<select id="e-cat"></select></label>
+        <label class="field">小分類<input id="e-sub" type="text" maxlength="30" list="e-sub-list" placeholder="例如：台新"></label>
+        <datalist id="e-sub-list"></datalist>
+      </div>
+      <label class="field">帳號<input id="e-user" type="text" maxlength="200" autocomplete="off"></label>
+      <label class="field">密碼
+        <div class="input-group">
+          <input id="e-pass" type="password" maxlength="200" autocomplete="new-password">
+          <button id="e-pass-toggle" class="mini" type="button">👁️</button>
+          <button id="e-gen" class="mini" type="button">🎲</button>
+        </div>
+      </label>
+      <div class="gen-opts">
+        <label>長度 <input id="e-gen-len" type="number" min="8" max="64" value="16"></label>
+        <label class="check"><input id="e-gen-sym" type="checkbox" checked> 包含符號</label>
+      </div>
+      <label class="field">網址<input id="e-url" type="url" maxlength="300" placeholder="https://"></label>
+      <label class="field">備註<textarea id="e-note" rows="3" maxlength="1000"></textarea></label>
+      <p class="hint">⚠️ 網址和備註會跟名稱一起顯示在清單上，請不要寫密碼或安全提問的答案。</p>
+      <p id="e-error" class="error" hidden></p>
+      <button id="e-save" class="btn btn-primary" type="button">儲存</button>
+    </div>
+  </div>
+
+  <!-- 設定 -->
+  <div id="sheet-settings" class="sheet" hidden>
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2>⚙️ 設定</h2>
+        <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
+      </div>
+
+      <h3>更換主密碼</h3>
+      <p class="hint">換完之後，記得告訴家人新的主密碼。家人會收到 LINE 通知。</p>
+      <label class="field">目前的主密碼<input id="s-old" type="password" autocomplete="current-password"></label>
+      <label class="field">新的主密碼<input id="s-new" type="password" autocomplete="new-password"></label>
+      <div class="strength"><div id="s-strength-bar"></div></div>
+      <label class="field">再輸入一次<input id="s-new2" type="password" autocomplete="new-password"></label>
+      <label class="field">新的提示（選填，留空就維持原本的）<input id="s-new-hint" type="text" maxlength="100"></label>
+      <p id="s-error" class="error" hidden></p>
+      <button id="s-rekey" class="btn btn-outline blue" type="button">更換主密碼</button>
+
+      <h3>主密碼提示</h3>
+      <p id="s-hint-now" class="hint"></p>
+      <label class="field">新的提示（留空＝不顯示提示）<input id="s-hint" type="text" maxlength="100"></label>
+      <label class="field">主密碼（用來確認提示不會洩漏主密碼）<input id="s-hint-pw" type="password" autocomplete="current-password"></label>
+      <p id="s-hint-error" class="error" hidden></p>
+      <button id="s-hint-save" class="btn btn-outline blue" type="button">儲存提示</button>
+
+      <h3>救援碼</h3>
+      <p class="hint">救援碼遺失、或擔心被別人看到時，可以重新產生一組；舊的會作廢。</p>
+      <label class="field">主密碼<input id="s-rc-pw" type="password" autocomplete="current-password"></label>
+      <p id="s-rc-error" class="error" hidden></p>
+      <button id="s-rc-new" class="btn btn-outline orange" type="button">🆘 重新產生救援碼</button>
+
+      <h3>備份</h3>
+      <p class="hint">備份檔一樣是加密的，要有<b>備份當時的主密碼</b>才能還原。還原會取代目前全部的資料（主密碼、救援碼不變）。</p>
+      <div class="row">
+        <button id="s-export" class="btn btn-outline blue" type="button">⬇️ 匯出備份</button>
+        <label class="btn btn-outline orange file-btn">⬆️ 從備份還原<input id="s-import" type="file" accept="application/json,.json" hidden></label>
+      </div>
+      <p id="s-backup-msg" class="hint"></p>
+
+      <h3>存取紀錄</h3>
+      <button id="s-log-load" class="btn btn-outline purple" type="button">查看最近 100 筆</button>
+      <ul id="s-log" class="log"></ul>
+
+      <h3>緊急鎖定</h3>
+      <p class="hint">懷疑有人盜用時使用。按下後所有人都打不開，要到 GAS 刪除 VAULT_LOCKED 才能解除。</p>
+      <button id="s-lock" class="btn btn-danger" type="button">🚨 緊急鎖定密碼本</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="vault-crypto.js"></script>
+  <script src="vendor/liff-sdk-2.31.0.js" integrity="sha384-T6WhT96rkehAFkTtmiRZ60sehxj4zgbifvzi7oGH792T3NN++f2rCvyb/WrHAz2D"></script>
+  <script src="app.js"></script>
+</body>
+</html>
