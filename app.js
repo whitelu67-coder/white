@@ -77,9 +77,9 @@
 
   function showLocked(lock) {
     clearSecrets();
-    showMessage('🔒', '密碼本已被緊急鎖定',
+    showMessage('🔒', '密碼庫已被緊急鎖定',
       (lock && lock.at ? fmtTime(lock.at) + '　' : '') + (lock && lock.by ? '原因：' + lock.by + '\n\n' : '\n') +
-      '所有人都暫時打不開，資料不會刪除。\n確認安全後，到密碼本的 GAS 刪除指令碼屬性 VAULT_LOCKED 即可解除。', { retry: true });
+      '所有人都暫時打不開，資料不會刪除。\n確認安全後，到密碼庫的 GAS 刪除指令碼屬性 VAULT_LOCKED 即可解除。', { retry: true });
   }
 
   function setError(id, text) {
@@ -243,11 +243,11 @@
         showMessage('⚠️', '取得身分失敗', 'LIFF 需要開啟 openid 權限，請檢查 LINE Developers 的 LIFF 設定。');
         return;
       }
-      $('loading-text').textContent = '正在讀取密碼本…';
+      $('loading-text').textContent = '正在讀取密碼庫…';
       await loadMeta();
     } catch (e) {
       if (e.handled) return;
-      if (e.code === 'FORBIDDEN') showMessage('🚫', '你沒有權限', '這個密碼本只開放給家人使用。');
+      if (e.code === 'FORBIDDEN') showMessage('🚫', '你沒有權限', '這個密碼庫只開放給家人使用。');
       else showMessage('😥', '讀取失敗', e.message || '請稍後再試一次。', { retry: true });
     }
   }
@@ -268,7 +268,7 @@
     if (res.lock) return showLocked(res.lock);
     state.meta = res.meta;
     if (!res.meta.initialized) {
-      showMessage('🛠️', '密碼本還沒設定主密碼', '請管理者用電腦的「主密碼工具」產生設定，貼到密碼本 GAS 的指令碼屬性 VAULT_META。', { retry: true });
+      showMessage('🛠️', '密碼庫還沒設定登入密碼', '請管理者用電腦的「主密碼工具」產生設定，貼到密碼庫 GAS 的指令碼屬性 VAULT_META。', { retry: true });
       return;
     }
     showUnlock(res.cooldown ? '錯太多次了，請 ' + Math.ceil(res.cooldown / 60) + ' 分鐘後再試' : '');
@@ -276,7 +276,7 @@
 
   function showUnlock(errorText) {
     $('unlock-hint').hidden = !(state.meta && state.meta.hint);   // 有設定提示就直接顯示
-    $('unlock-hint').textContent = state.meta && state.meta.hint ? '💡 主密碼提示：' + state.meta.hint : '';
+    $('unlock-hint').textContent = state.meta && state.meta.hint ? '💡 登入密碼提示：' + state.meta.hint : '';
     setError('unlock-error', errorText || '');
     show('screen-unlock');
     $('unlock-pw').focus();

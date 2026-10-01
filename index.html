@@ -7,7 +7,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.line.me https://*.line-scdn.net; frame-src https://*.line.me; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
-  <title>密碼本</title>
+  <title>密碼庫</title>
   <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
@@ -30,9 +30,9 @@
     <!-- 解鎖 -->
     <section id="screen-unlock" class="screen" hidden>
       <div class="card">
-        <h1>🔐 密碼本</h1>
+        <h1>🔐 密碼庫</h1>
         <form id="unlock-form" autocomplete="off">
-          <div class="float"><input id="unlock-pw" type="password" autocomplete="current-password" placeholder=" "><label for="unlock-pw">主密碼</label></div>
+          <div class="float"><input id="unlock-pw" type="password" autocomplete="current-password" placeholder=" "><label for="unlock-pw">登入密碼</label></div>
           <p id="unlock-hint" class="hint-box" hidden></p>
           <p id="unlock-error" class="error" hidden></p>
           <button id="unlock-submit" class="btn btn-primary" type="submit">解鎖</button>
@@ -43,7 +43,7 @@
     <!-- 清單 -->
     <section id="screen-list" class="screen screen-list" hidden>
       <header class="topbar">
-        <h1>🔐 密碼本</h1>
+        <h1>🔐 密碼庫</h1>
         <div class="topbar-actions">
           <button id="btn-add" class="add-btn" type="button">＋ 新增項目</button>
         </div>
@@ -160,6 +160,6 @@
   <script src="config.js"></script>
   <script src="vault-crypto.js"></script>
   <script src="vendor/liff-sdk-2.31.0.js" integrity="sha384-T6WhT96rkehAFkTtmiRZ60sehxj4zgbifvzi7oGH792T3NN++f2rCvyb/WrHAz2D"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
