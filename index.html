@@ -31,11 +31,8 @@
     <section id="screen-unlock" class="screen" hidden>
       <div class="card">
         <h1>🔐 密碼本</h1>
-        <p class="muted">請輸入主密碼</p>
         <form id="unlock-form" autocomplete="off">
-          <label class="field">主密碼
-            <input id="unlock-pw" type="password" autocomplete="current-password">
-          </label>
+          <div class="float"><input id="unlock-pw" type="password" autocomplete="current-password" placeholder=" "><label for="unlock-pw">主密碼</label></div>
           <button id="unlock-hint-btn" class="link-btn" type="button" hidden>💡 顯示提示</button>
           <p id="unlock-hint" class="hint-box" hidden></p>
           <p id="unlock-error" class="error" hidden></p>
@@ -103,26 +100,17 @@
         <h2 id="e-title">新增</h2>
         <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
       </div>
-      <label class="field">名稱 *<input id="e-name" type="text" maxlength="60" placeholder="例如：台新 Richart"></label>
+      <div class="float"><input id="e-name" type="text" maxlength="60" placeholder=" "><label for="e-name">名稱（必填）</label></div>
       <div class="row">
-        <label class="field">分類<select id="e-cat"></select></label>
-        <label class="field">小分類<input id="e-sub" type="text" maxlength="30" list="e-sub-list" placeholder="例如：台新"></label>
+        <div class="float fixed"><select id="e-cat"></select><label for="e-cat">分類</label></div>
+        <div class="float"><input id="e-sub" type="text" maxlength="30" list="e-sub-list" placeholder=" "><label for="e-sub">小分類</label></div>
         <datalist id="e-sub-list"></datalist>
       </div>
-      <label class="field">帳號<input id="e-user" type="text" maxlength="200" autocomplete="off"></label>
-      <label class="field">密碼
-        <div class="input-group">
-          <input id="e-pass" type="password" maxlength="200" autocomplete="new-password">
-          <button id="e-pass-toggle" class="mini" type="button">👁️</button>
-          <button id="e-gen" class="mini" type="button">🎲</button>
-        </div>
-      </label>
-      <div class="gen-opts">
-        <label>長度 <input id="e-gen-len" type="number" min="8" max="64" value="16"></label>
-        <label class="check"><input id="e-gen-sym" type="checkbox" checked> 包含符號</label>
-      </div>
-      <label class="field">網址<input id="e-url" type="url" maxlength="300" placeholder="https://"></label>
-      <label class="field">備註<textarea id="e-note" rows="3" maxlength="1000"></textarea></label>
+      <div class="float"><input id="e-user" type="text" autocomplete="off" placeholder=" "><label for="e-user">帳號 <span class="label-note">（儲存會做加密）</span></label></div>
+      <div class="float has-btn"><input id="e-pass" type="password" autocomplete="off" placeholder=" "><label for="e-pass">密碼 <span class="label-note">（儲存會做加密）</span></label>
+        <button id="e-pass-toggle" class="mini" type="button" aria-label="顯示密碼">👁️</button></div>
+      <div class="float"><input id="e-url" type="url" maxlength="300" placeholder=" "><label for="e-url">網址</label></div>
+      <div class="float"><textarea id="e-note" rows="3" maxlength="1000" placeholder=" "></textarea><label for="e-note">備註</label></div>
       <p class="hint">⚠️ 網址和備註會跟名稱一起顯示在清單上，請不要寫密碼或安全提問的答案。</p>
       <p id="e-error" class="error" hidden></p>
       <button id="e-save" class="btn btn-primary" type="button">儲存</button>

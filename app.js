@@ -579,10 +579,6 @@
     $('e-cat').addEventListener('change', fillSubSuggestions);
     $('e-save').addEventListener('click', onSave);
     $('e-pass-toggle').addEventListener('click', function () { const p = $('e-pass'); p.type = p.type === 'password' ? 'text' : 'password'; });
-    $('e-gen').addEventListener('click', function () {
-      $('e-pass').value = VC.generatePassword(Number($('e-gen-len').value) || 16, { symbols: $('e-gen-sym').checked });
-      $('e-pass').type = 'text';
-    });
 
     document.querySelectorAll('[data-close]').forEach(function (b) {
       b.addEventListener('click', function () { closeSheet(b.closest('.sheet').id); });
