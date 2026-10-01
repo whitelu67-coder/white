@@ -4,10 +4,11 @@
 // 這個網頁只做：輸入主密碼打開、查詢、新增／修改／刪除帳密
 //   主密碼的設定（建立、更換、救援碼）不在網頁上，是在電腦用主密碼工具產生後貼到 GAS 指令碼屬性
 // 流程：LINE 身分（ID Token）→ 輸入主密碼 → 手機推導出「登入鑰」給後端驗證、「KEK」留在手機
-//      → 後端驗證通過才給「包起來的密碼本金鑰」和摘要 → 手機用 KEK 打開金鑰、解密
+//      → 後端驗證通過才給「包起來的密碼本金鑰」和清單 → 手機用 KEK 打開金鑰
 // 安全原則：
-//   ・主密碼、金鑰、明文只在這個網頁的記憶體裡，不存 localStorage、不寫 console
-//   ・解鎖只解開「摘要」；帳號密碼點開那一筆才下載、才解密，關掉就清掉
+//   ・帳號、密碼加密；名稱、分類、小分類、歸屬者、網址、備註不加密（直接存在試算表，方便在 Excel 查看）
+//   ・主密碼、金鑰、帳號密碼明文只在這個網頁的記憶體裡，不存 localStorage、不寫 console
+//   ・帳號密碼點開那一筆才下載、才解密，關掉就清掉
 //   ・畫面一律用 textContent 放資料，不用 innerHTML，資料裡就算有 HTML 也不會被執行
 //   ・5 分鐘沒動作、或切到別的 App 超過 2 分鐘，就清掉金鑰鎖定
 // ============================================================
@@ -18,13 +19,14 @@
   const VC = window.VaultCrypto;
   // 本機預覽（localhost 或直接開檔案）才會用假的 LINE 身分；正式網址是 https，不會符合
   const IS_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) || location.protocol === 'file:';
+  // name：存在試算表裡的分類文字（試算表直接看得懂；在 Excel 改成這幾個字也認得）
   const CATEGORIES = [
-    { key: 'home', label: '🏠 家庭' },
-    { key: 'school', label: '🏫 學校' },
-    { key: 'finance', label: '💰 金融' },
-    { key: 'shopping', label: '🛒 購物' },
-    { key: 'work', label: '💼 工作' },
-    { key: 'other', label: '📦 其他' }
+    { key: 'home', label: '🏠 家庭', name: '家庭' },
+    { key: 'school', label: '🏫 學校', name: '學校' },
+    { key: 'finance', label: '💰 金融', name: '金融' },
+    { key: 'shopping', label: '🛒 購物', name: '購物' },
+    { key: 'work', label: '💼 工作', name: '工作' },
+    { key: 'other', label: '📦 其他', name: '其他' }
   ];
   const state = {
     idToken: null,
@@ -225,7 +227,7 @@
 
   function showUnlock(errorText) {
     $('unlock-hint').hidden = !(state.meta && state.meta.hint);   // 有設定提示就直接顯示
-    $('unlock-hint').textContent = state.meta && state.meta.hint ? '💡 ' + state.meta.hint : '';
+    $('unlock-hint').textContent = state.meta && state.meta.hint ? '💡 主密碼提示：' + state.meta.hint : '';
     setError('unlock-error', errorText || '');
     show('screen-unlock');
     $('unlock-pw').focus();
@@ -255,35 +257,38 @@
       state.session = res.session;
       state.owners = res.owners || [];
       state.me = res.me || '';
+      state.filterOwner = state.me;   // 打開時，歸屬者篩選預設選自己（按「👤 全部」看全部）
       $('unlock-pw').value = '';
       state.encrypted = res.entries;
-      await decryptIndex();
+      loadIndex();
       renderList();
       resetLockTimer();
     });
   }
 
-  /** 解開全部摘要（名稱、分類、小分類、網址、備註） */
-  async function decryptIndex() {
-    const out = [];
-    let broken = 0;
-    for (const e of state.encrypted || []) {
-      try {
-        const s = await VC.decryptSummary(state.vk, e.id, e.summary.iv, e.summary.data);
-        out.push({ id: e.id, rev: e.rev, updatedAt: e.updatedAt, updatedBy: e.updatedBy, s: s });
-      } catch (err) {
-        broken++;
-      }
-    }
-    state.items = out;
+  /** 清單（名稱、分類、小分類、歸屬者、網址、備註都是明文） */
+  function loadIndex() {
+    state.items = (state.encrypted || []).map(function (e) {
+      return { id: e.id, rev: e.rev, updatedAt: e.updatedAt, updatedBy: e.updatedBy, s: fromServer(e.summary || {}) };
+    });
     state.encrypted = null;
-    if (broken) toast('有 ' + broken + ' 筆資料解不開（可能已損毀）');
+  }
+
+  /** 試算表的明文摘要 → 網頁用的格式（分類文字 → key） */
+  function fromServer(s) {
+    const c = CATEGORIES.filter(function (x) { return x.name === s.category || x.key === s.category; })[0];
+    return { name: s.name || '', category: c ? c.key : 'other', subcategory: s.subcategory || '', owner: s.owner || '', url: s.url || '', note: s.note || '' };
+  }
+
+  function toServer(s) {
+    const c = CATEGORIES.filter(function (x) { return x.key === s.category; })[0];
+    return { name: s.name, category: c ? c.name : '其他', subcategory: s.subcategory || '', owner: s.owner || '', url: s.url || '', note: s.note || '' };
   }
 
   async function reloadIndex() {
     const res = await api('getIndex');
     state.encrypted = res.entries;
-    await decryptIndex();
+    loadIndex();
     renderList();
   }
 
@@ -540,7 +545,7 @@
         const res = await api('saveEntry', {
           id: id,
           rev: item ? item.rev : 0,
-          summary: await VC.encryptSummary(state.vk, id, summary),
+          summary: toServer(summary),   // 名稱、分類…不加密，直接存在試算表
           secret: await VC.encryptSecret(state.vk, id, secret)
         });
         const saved = { id: id, rev: res.rev, updatedAt: res.updatedAt, updatedBy: res.updatedBy, s: summary };
