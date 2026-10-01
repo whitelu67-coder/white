@@ -97,6 +97,11 @@
     return splitKeys(bits, 'master');
   }
 
+  /** 登入鑰的雜湊：存在 GAS 的 VAULT_META，後端用一樣的算法比對（SHA-256(登入鑰字串) → base64） */
+  async function authHash(authB64) {
+    return toB64(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(authB64))));
+  }
+
   /** 救援碼 → { kek, auth }（大小寫、空白、連字號都不影響） */
   async function deriveRecoveryKeys(code, saltB64) {
     const bits = await pbkdf2Bits(normalizeRecoveryCode(code), saltB64, RECOVERY_ITERATIONS);
@@ -245,6 +250,7 @@
     newId: newId,
     deriveMasterKeys: deriveMasterKeys,
     deriveRecoveryKeys: deriveRecoveryKeys,
+    authHash: authHash,
     newRecoveryCode: newRecoveryCode,
     normalizeRecoveryCode: normalizeRecoveryCode,
     isValidRecoveryCode: isValidRecoveryCode,

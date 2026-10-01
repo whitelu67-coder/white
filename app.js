@@ -1,6 +1,8 @@
 // ============================================================
 // White 密碼本：LIFF 網頁
 // ------------------------------------------------------------
+// 這個網頁只做：輸入主密碼打開、查詢、新增／修改／刪除帳密
+//   主密碼的設定（建立、更換、救援碼）不在網頁上，是在電腦用主密碼工具產生後貼到 GAS 指令碼屬性
 // 流程：LINE 身分（ID Token）→ 輸入主密碼 → 手機推導出「登入鑰」給後端驗證、「KEK」留在手機
 //      → 後端驗證通過才給「包起來的密碼本金鑰」和摘要 → 手機用 KEK 打開金鑰、解密
 // 安全原則：
@@ -24,20 +26,13 @@
     { key: 'work', label: '💼 工作' },
     { key: 'other', label: '📦 其他' }
   ];
-  const ACTION_LABELS = { open: '輸入主密碼打開', init: '建立密碼本', view: '查看帳密', create: '新增', update: '修改',
-    delete: '刪除', viewAll: '取出全部（匯出備份）', rekey: '更換主密碼', restore: '從備份還原', recover: '使用救援碼',
-    newRecovery: '重新產生救援碼', hint: '修改提示', lock: '緊急鎖定', wrongPassword: '⚠️ 主密碼錯誤', wrongRecovery: '⚠️ 救援碼錯誤' };
-
   const state = {
     idToken: null,
-    meta: null,        // { initialized, saltM, iterations, saltR, hint }
+    meta: null,        // { initialized, saltM, iterations, hint }
     session: null,     // 後端發的工作階段（15 分鐘）
-    wrapM: null,       // 用主密碼包起來的密碼本金鑰（沒有主密碼打不開）
     vk: null,          // 密碼本金鑰（CryptoKey，不可匯出）
     encrypted: null,   // 還沒解開的摘要
     items: [],         // [{ id, rev, updatedAt, updatedBy, s: 摘要明文 }]
-    pending: null,     // 顯示救援碼畫面時，接下來要做的事
-    recoverRaw: null,  // 用救援碼打開後、設定新主密碼前的密碼本金鑰（用完馬上清掉）
     filterCat: '',
     detail: null,
     editing: null,
@@ -59,7 +54,7 @@
     return e;
   }
 
-  const SCREENS = ['screen-loading', 'screen-message', 'screen-setup', 'screen-recovery-code', 'screen-unlock', 'screen-recover', 'screen-newmaster', 'screen-list'];
+  const SCREENS = ['screen-loading', 'screen-message', 'screen-unlock', 'screen-list'];
   function show(screenId) {
     SCREENS.forEach(function (id) { $(id).hidden = id !== screenId; });
   }
@@ -78,7 +73,7 @@
     clearSecrets();
     showMessage('🔒', '密碼本已被緊急鎖定',
       (lock && lock.at ? fmtTime(lock.at) + '　' : '') + (lock && lock.by ? '原因：' + lock.by + '\n\n' : '\n') +
-      '所有人都暫時打不開，資料不會刪除。\n確認安全後，到密碼本的 GAS 刪除指令碼屬性 VAULT_LOCKED（或執行 unlockVault）即可解除。', { retry: true });
+      '所有人都暫時打不開，資料不會刪除。\n確認安全後，到密碼本的 GAS 刪除指令碼屬性 VAULT_LOCKED 即可解除。', { retry: true });
   }
 
   function setError(id, text) {
@@ -134,19 +129,6 @@
     toast('已複製');
   }
 
-  function renderStrength(barId, pw) {
-    $(barId).className = pw ? 's' + VC.passwordStrength(pw) : '';
-  }
-
-  /** 新主密碼的共同檢查（建立、換主密碼、用救援碼重設） */
-  function checkNewMaster(pw, pw2, hint) {
-    if (pw.length < 8) return '主密碼至少要 8 個字';
-    if (VC.passwordStrength(pw) < 2) return '主密碼太容易被猜到，請加長或混合中英文、數字、符號';
-    if (pw !== pw2) return '兩次輸入的主密碼不一樣';
-    if (hint && VC.hintRevealsPassword(hint, pw)) return '提示太明顯了（裡面有主密碼的內容），請換一個只有家人懂的提示';
-    return '';
-  }
-
   // ============================================================
   // 後端 API
   // ============================================================
@@ -166,7 +148,7 @@
       err.code = res.code;
       err.res = res;
       if (res.code === 'LOCKED') { showLocked(res.lock); err.handled = true; }
-      else if (res.code === 'UNAUTHORIZED' || res.code === 'REAUTH') {
+      else if (res.code === 'UNAUTHORIZED') {
         clearSecrets();
         showMessage('🔑', '需要重新登入 LINE', res.error, { relogin: true });
         err.handled = true;
@@ -232,8 +214,7 @@
     if (res.lock) return showLocked(res.lock);
     state.meta = res.meta;
     if (!res.meta.initialized) {
-      show('screen-setup');
-      $('setup-pw').focus();
+      showMessage('🛠️', '密碼本還沒設定主密碼', '請管理者用電腦的「主密碼工具」產生設定，貼到密碼本 GAS 的指令碼屬性 VAULT_META。', { retry: true });
       return;
     }
     showUnlock(res.cooldown ? '錯太多次了，請 ' + Math.ceil(res.cooldown / 60) + ' 分鐘後再試' : '');
@@ -246,66 +227,6 @@
     setError('unlock-error', errorText || '');
     show('screen-unlock');
     $('unlock-pw').focus();
-  }
-
-  // ============================================================
-  // 建立密碼本：主密碼 → 救援碼 → 完成
-  // ============================================================
-
-  function onSetup() {
-    const pw = $('setup-pw').value, pw2 = $('setup-pw2').value, hint = $('setup-hint').value.trim();
-    const err = checkNewMaster(pw, pw2, hint);
-    if (err) return setError('setup-error', err);
-    setError('setup-error', '');
-    showRecoveryCode({ mode: 'setup', pw: pw, hint: hint });
-  }
-
-  function showRecoveryCode(pending) {
-    pending.code = VC.newRecoveryCode();
-    state.pending = pending;
-    $('rc-code').textContent = pending.code;
-    $('rc-agree').checked = false;
-    setError('rc-error', '');
-    show('screen-recovery-code');
-  }
-
-  /** 救援碼抄好之後：真正建立／重設 */
-  async function onRecoveryCodeDone() {
-    if (!$('rc-agree').checked) return setError('rc-error', '請先把救援碼抄在紙上，再勾選確認');
-    const p = state.pending;
-    if (!p) return;
-    await withBusy('rc-done', '處理中…', async function () {
-      try {
-        if (p.mode === 'setup') await finishSetup(p);
-        else if (p.mode === 'recover') await finishRecover(p);
-        else if (p.mode === 'regen') await finishRegen(p);
-        state.pending = null;
-        $('rc-code').textContent = '';
-      } catch (e) {
-        if (!e.handled) setError('rc-error', e.message || '發生錯誤');
-      }
-    });
-  }
-
-  async function finishSetup(p) {
-    const saltM = VC.newSalt(), saltR = VC.newSalt();
-    const m = await VC.deriveMasterKeys(p.pw, saltM, VC.PBKDF2_ITERATIONS);
-    const r = await VC.deriveRecoveryKeys(p.code, saltR);
-    const raw = VC.newVaultKeyRaw();
-    const wrapM = await VC.wrapVaultKey(m.kek, raw);
-    const wrapR = await VC.wrapVaultKey(r.kek, raw);
-    const res = await api('initVault', { saltM: saltM, iterations: VC.PBKDF2_ITERATIONS, wrapM: wrapM, authM: m.auth,
-      saltR: saltR, wrapR: wrapR, authR: r.auth, hint: p.hint });
-    state.vk = await VC.importVaultKey(raw);
-    VC.wipe(raw);
-    state.session = res.session;
-    state.wrapM = wrapM;
-    state.meta = { initialized: true, saltM: saltM, iterations: VC.PBKDF2_ITERATIONS, saltR: saltR, hint: p.hint };
-    ['setup-pw', 'setup-pw2', 'setup-hint'].forEach(function (id) { $(id).value = ''; });
-    state.items = [];
-    renderList();
-    resetLockTimer();
-    toast('密碼本建立完成');
   }
 
   // ============================================================
@@ -330,7 +251,6 @@
       state.vk = await VC.importVaultKey(raw);
       VC.wipe(raw);
       state.session = res.session;
-      state.wrapM = res.wrapM;
       $('unlock-pw').value = '';
       state.encrypted = res.entries;
       await decryptIndex();
@@ -368,90 +288,24 @@
     if (state.session) api('logout').catch(function () {});
     state.vk = null;
     state.session = null;
-    state.wrapM = null;
     state.items = [];
     state.encrypted = null;
-    state.pending = null;
-    if (state.recoverRaw) { VC.wipe(state.recoverRaw); state.recoverRaw = null; }
-    ['sheet-detail', 'sheet-edit', 'sheet-settings'].forEach(closeSheet);
-    ['s-old', 's-new', 's-new2', 's-new-hint', 's-hint', 's-hint-pw', 's-rc-pw', 'search', 'unlock-pw', 'rec-code', 'nm-pw', 'nm-pw2'].forEach(function (id) { $(id).value = ''; });
-    $('rc-code').textContent = '';
+    ['sheet-detail', 'sheet-edit'].forEach(closeSheet);
+    ['search', 'unlock-pw'].forEach(function (id) { $(id).value = ''; });
     $('list').textContent = '';
     clearTimeout(state.lockTimer);
   }
 
   function lock(reason) {
-    const wasOpen = !!(state.vk || state.recoverRaw || state.pending);
-    if (state.pending && state.pending.raw) VC.wipe(state.pending.raw);
+    const wasOpen = !!state.vk;
     clearSecrets();
     if (!wasOpen && !reason) return;
-    // 還在第一次建立的途中（密碼本還不存在）：回到建立畫面重新開始
-    if (!state.meta || !state.meta.initialized) {
-      ['setup-pw', 'setup-pw2', 'setup-hint'].forEach(function (id) { $(id).value = ''; });
-      setError('setup-error', reason ? reason + '，請重新設定' : '');
-      show('screen-setup');
-      return;
-    }
     showUnlock(reason || '');
   }
 
   function resetLockTimer() {
     clearTimeout(state.lockTimer);
-    if (state.vk || state.recoverRaw) state.lockTimer = setTimeout(function () { lock('已經 5 分鐘沒有動作，自動鎖定了'); }, CFG.AUTO_LOCK_MS || 300000);
-  }
-
-  // ============================================================
-  // 忘記主密碼：救援碼 → 設定新主密碼 → 新的救援碼
-  // ============================================================
-
-  async function onRecover() {
-    const code = $('rec-code').value;
-    if (!VC.isValidRecoveryCode(code)) return setError('rec-error', '救援碼格式不對（應該是 30 個字）');
-    setError('rec-error', '');
-    await withBusy('rec-submit', '確認中…', async function () {
-      const r = await VC.deriveRecoveryKeys(code, state.meta.saltR);
-      let res;
-      try {
-        res = await api('recover', { auth: r.auth });
-      } catch (e) {
-        if (!e.handled) setError('rec-error', e.message);
-        return;
-      }
-      state.recoverRaw = await VC.unwrapVaultKeyRaw(r.kek, res.wrapR);
-      state.session = res.session;
-      $('rec-code').value = '';
-      ['nm-pw', 'nm-pw2', 'nm-hint'].forEach(function (id) { $(id).value = ''; });
-      setError('nm-error', '');
-      show('screen-newmaster');
-      resetLockTimer();
-    });
-  }
-
-  function onNewMaster() {
-    const pw = $('nm-pw').value, pw2 = $('nm-pw2').value, hint = $('nm-hint').value.trim();
-    const err = checkNewMaster(pw, pw2, hint);
-    if (err) return setError('nm-error', err);
-    setError('nm-error', '');
-    showRecoveryCode({ mode: 'recover', pw: pw, hint: hint });
-  }
-
-  async function finishRecover(p) {
-    const saltM = VC.newSalt(), saltR = VC.newSalt();
-    const m = await VC.deriveMasterKeys(p.pw, saltM, VC.PBKDF2_ITERATIONS);
-    const r = await VC.deriveRecoveryKeys(p.code, saltR);
-    const wrapM = await VC.wrapVaultKey(m.kek, state.recoverRaw);
-    const res = await api('changeMaster', { saltM: saltM, iterations: VC.PBKDF2_ITERATIONS, wrapM: wrapM, authM: m.auth,
-      saltR: saltR, wrapR: await VC.wrapVaultKey(r.kek, state.recoverRaw), authR: r.auth, hint: p.hint });
-    state.vk = await VC.importVaultKey(state.recoverRaw);
-    VC.wipe(state.recoverRaw);
-    state.recoverRaw = null;
-    state.session = res.session;
-    state.wrapM = wrapM;
-    state.meta = Object.assign({}, state.meta, { saltM: saltM, iterations: VC.PBKDF2_ITERATIONS, saltR: saltR, hint: p.hint });
-    ['nm-pw', 'nm-pw2', 'nm-hint'].forEach(function (id) { $(id).value = ''; });
-    await reloadIndex();
-    resetLockTimer();
-    alert('新的主密碼設定好了。\n\n請告訴家人新的主密碼，舊的救援碼已經作廢，請保存剛剛抄下的新救援碼。');
+    if (state.vk) state.lockTimer = setTimeout(function () { lock('已經 5 分鐘沒有動作，自動鎖定了'); }, CFG.AUTO_LOCK_MS || 300000);
   }
 
   // ============================================================
@@ -673,201 +527,6 @@
   }
 
   // ============================================================
-  // 設定
-  // ============================================================
-
-  /** 用主密碼打開「包起來的密碼本金鑰」→ 原始 bytes（打錯會丟出錯誤），同時回傳登入鑰 */
-  async function openWithMaster(pw) {
-    const m = await VC.deriveMasterKeys(pw, state.meta.saltM, state.meta.iterations);
-    try {
-      return { raw: await VC.unwrapVaultKeyRaw(m.kek, state.wrapM), auth: m.auth };
-    } catch (e) {
-      throw new Error('主密碼錯誤');
-    }
-  }
-
-  async function onRekey() {
-    const oldPw = $('s-old').value, pw = $('s-new').value, pw2 = $('s-new2').value, hint = $('s-new-hint').value.trim();
-    const err = checkNewMaster(pw, pw2, hint);
-    if (err) return setError('s-error', err);
-    if (!hint && state.meta.hint && VC.hintRevealsPassword(state.meta.hint, pw)) return setError('s-error', '目前的提示會洩漏新的主密碼，請一起輸入新的提示');
-    setError('s-error', '');
-    await withBusy('s-rekey', '更換中…', async function () {
-      let old;
-      try { old = await openWithMaster(oldPw); } catch (e) { return setError('s-error', '目前的主密碼錯誤'); }
-      try {
-        const saltM = VC.newSalt();
-        const m = await VC.deriveMasterKeys(pw, saltM, VC.PBKDF2_ITERATIONS);
-        const wrapM = await VC.wrapVaultKey(m.kek, old.raw);
-        const body = { authOld: old.auth, saltM: saltM, iterations: VC.PBKDF2_ITERATIONS, wrapM: wrapM, authM: m.auth };
-        if (hint) body.hint = hint;
-        const res = await api('changeMaster', body);
-        state.session = res.session;
-        state.wrapM = wrapM;
-        state.meta = Object.assign({}, state.meta, { saltM: saltM, iterations: VC.PBKDF2_ITERATIONS }, hint ? { hint: hint } : {});
-        ['s-old', 's-new', 's-new2', 's-new-hint'].forEach(function (id) { $(id).value = ''; });
-        renderStrength('s-strength-bar', '');
-        closeSheet('sheet-settings');
-        alert('主密碼已更換。\n\n請記得告訴家人新的主密碼，他們下次打開要用新的。');
-      } catch (e) {
-        if (!e.handled) setError('s-error', e.message);
-      } finally {
-        VC.wipe(old.raw);
-      }
-    });
-  }
-
-  async function onSaveHint() {
-    const hint = $('s-hint').value.trim(), pw = $('s-hint-pw').value;
-    setError('s-hint-error', '');
-    await withBusy('s-hint-save', '儲存中…', async function () {
-      let old;
-      try { old = await openWithMaster(pw); } catch (e) { return setError('s-hint-error', '主密碼錯誤'); }
-      VC.wipe(old.raw);
-      if (hint && VC.hintRevealsPassword(hint, pw)) return setError('s-hint-error', '提示太明顯了（裡面有主密碼的內容）');
-      try {
-        await api('setHint', { hint: hint });
-        state.meta.hint = hint;
-        $('s-hint').value = $('s-hint-pw').value = '';
-        $('s-hint-now').textContent = hint ? '目前的提示：' + hint : '目前沒有設定提示';
-        toast('提示已更新');
-      } catch (e) {
-        if (!e.handled) setError('s-hint-error', e.message);
-      }
-    });
-  }
-
-  async function onRegenRecovery() {
-    const pw = $('s-rc-pw').value;
-    setError('s-rc-error', '');
-    await withBusy('s-rc-new', '確認中…', async function () {
-      let old;
-      try { old = await openWithMaster(pw); } catch (e) { return setError('s-rc-error', '主密碼錯誤'); }
-      $('s-rc-pw').value = '';
-      closeSheet('sheet-settings');
-      showRecoveryCode({ mode: 'regen', raw: old.raw, authOld: old.auth });
-    });
-  }
-
-  async function finishRegen(p) {
-    try {
-      const saltR = VC.newSalt();
-      const r = await VC.deriveRecoveryKeys(p.code, saltR);
-      await api('setRecovery', { authOld: p.authOld, saltR: saltR, wrapR: await VC.wrapVaultKey(r.kek, p.raw), authR: r.auth });
-      state.meta.saltR = saltR;
-      renderList();
-      toast('新的救援碼已生效，舊的已作廢');
-    } finally {
-      VC.wipe(p.raw);
-    }
-  }
-
-  async function onExport() {
-    await withBusy('s-export', '準備中…', async function () {
-      try {
-        const res = await api('getAllSecrets');
-        for (const e of res.entries) {   // 先確認每一筆都解得開，才匯出
-          await VC.decryptSummary(state.vk, e.id, e.summary.iv, e.summary.data);
-          await VC.decryptSecret(state.vk, e.id, e.secret.iv, e.secret.data);
-        }
-        const backup = { format: 'white-vault-backup', version: 2, exportedAt: new Date().toISOString(),
-          saltM: res.saltM, iterations: res.iterations, wrapM: res.wrapM, entries: res.entries };
-        const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-        const a = el('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'white-vault-backup-' + new Date().toISOString().slice(0, 10) + '.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
-        $('s-backup-msg').textContent = '✅ 已匯出 ' + backup.entries.length + ' 筆（檔案是加密的，要用現在的主密碼才能還原）。如果在 LINE 裡沒有出現下載，請用「用預設瀏覽器開啟」再匯出一次。';
-      } catch (e) {
-        if (!e.handled) $('s-backup-msg').textContent = '❌ ' + e.message;
-      }
-    });
-  }
-
-  async function onImport(ev) {
-    const file = ev.target.files[0];
-    ev.target.value = '';
-    if (!file) return;
-    let backup;
-    try {
-      backup = JSON.parse(await file.text());
-      if (backup.format !== 'white-vault-backup' || backup.version !== 2 || !backup.wrapM || !Array.isArray(backup.entries)) throw new Error();
-    } catch (e) {
-      $('s-backup-msg').textContent = '❌ 這不是密碼本的備份檔';
-      return;
-    }
-    const pw = prompt('請輸入「備份當時」的主密碼（' + backup.entries.length + ' 筆，備份時間 ' + fmtTime(backup.exportedAt) + '）');
-    if (!pw) return;
-    let bk;
-    try {
-      const m = await VC.deriveMasterKeys(pw, backup.saltM, backup.iterations);
-      const raw = await VC.unwrapVaultKeyRaw(m.kek, backup.wrapM);
-      bk = await VC.importVaultKey(raw);
-      VC.wipe(raw);
-    } catch (e) {
-      $('s-backup-msg').textContent = '❌ 主密碼錯誤，無法還原';
-      return;
-    }
-    // 用備份的金鑰解開、再用現在的金鑰重新加密（主密碼、救援碼維持現在的）
-    const entries = [];
-    try {
-      for (const e of backup.entries) {
-        const s = await VC.decryptSummary(bk, e.id, e.summary.iv, e.summary.data);
-        const x = await VC.decryptSecret(bk, e.id, e.secret.iv, e.secret.data);
-        entries.push({ id: e.id, summary: await VC.encryptSummary(state.vk, e.id, s), secret: await VC.encryptSecret(state.vk, e.id, x) });
-      }
-    } catch (e) {
-      $('s-backup-msg').textContent = '❌ 備份檔有資料損毀，無法還原';
-      return;
-    }
-    if (!confirm('確定要還原嗎？\n\n目前密碼本的「全部」資料會被備份檔的 ' + entries.length + ' 筆取代（主密碼、救援碼不變）。家人會收到通知。')) return;
-    try {
-      await api('restore', { entries: entries });
-      closeSheet('sheet-settings');
-      await reloadIndex();
-      toast('已從備份還原 ' + entries.length + ' 筆');
-    } catch (e) {
-      if (!e.handled) $('s-backup-msg').textContent = '❌ ' + e.message;
-    }
-  }
-
-  async function onLoadLog() {
-    await withBusy('s-log-load', '讀取中…', async function () {
-      const res = await api('getLog');
-      const names = {};
-      state.items.forEach(function (it) { names[it.id] = it.s.name; });
-      const ul = $('s-log');
-      ul.textContent = '';
-      if (!res.log.length) ul.appendChild(el('li', null, '還沒有紀錄'));
-      res.log.forEach(function (l) {
-        const what = (ACTION_LABELS[l.action] || l.action) + (l.entryId ? '「' + (names[l.entryId] || '已刪除的項目') + '」' : '');
-        ul.appendChild(el('li', /^wrong/.test(l.action) ? 'warn-line' : null, fmtTime(l.time) + '　' + l.name + '　' + what));
-      });
-    });
-  }
-
-  async function onEmergencyLock() {
-    if (!confirm('確定要緊急鎖定嗎？\n\n所有人都會打不開密碼本，要到 GAS 刪除 VAULT_LOCKED 才能解除。家人會收到通知。')) return;
-    try {
-      const res = await api('lockVault');
-      showLocked(res.lock);
-    } catch (e) {
-      if (!e.handled) toast(e.message);
-    }
-  }
-
-  function openSettings() {
-    ['s-error', 's-hint-error', 's-rc-error'].forEach(function (id) { setError(id, ''); });
-    $('s-backup-msg').textContent = '';
-    $('s-log').textContent = '';
-    $('s-hint-now').textContent = state.meta.hint ? '目前的提示：' + state.meta.hint : '目前沒有設定提示';
-    openSheet('sheet-settings');
-  }
-
-  // ============================================================
   // 共用：按鈕忙碌狀態
   // ============================================================
 
@@ -894,25 +553,12 @@
   // ============================================================
 
   function bind() {
-    $('setup-submit').addEventListener('click', onSetup);
-    $('setup-pw').addEventListener('input', function () {
-      const pw = $('setup-pw').value;
-      renderStrength('setup-strength-bar', pw);
-      $('setup-strength-text').textContent = pw ? ['太弱', '弱', '普通', '強', '很強'][VC.passwordStrength(pw)] : '';
-    });
-    $('rc-done').addEventListener('click', onRecoveryCodeDone);
     $('unlock-form').addEventListener('submit', onUnlock);
     $('unlock-hint-btn').addEventListener('click', function () { $('unlock-hint').hidden = !$('unlock-hint').hidden; });
-    $('unlock-forgot').addEventListener('click', function () { setError('rec-error', ''); show('screen-recover'); $('rec-code').focus(); });
-    $('rec-submit').addEventListener('click', onRecover);
-    $('rec-back').addEventListener('click', function () { $('rec-code').value = ''; showUnlock(''); });
-    $('nm-submit').addEventListener('click', onNewMaster);
-    $('nm-pw').addEventListener('input', function () { renderStrength('nm-strength-bar', $('nm-pw').value); });
     $('message-retry').addEventListener('click', function () { location.reload(); });
     $('message-relogin').addEventListener('click', relogin);
 
     $('btn-lock').addEventListener('click', function () { lock('已鎖定'); });
-    $('btn-settings').addEventListener('click', openSettings);
     $('btn-add').addEventListener('click', function () { openEdit(null, null); });
     $('search').addEventListener('input', renderList);
 
@@ -938,15 +584,6 @@
       $('e-pass').type = 'text';
     });
 
-    $('s-new').addEventListener('input', function () { renderStrength('s-strength-bar', $('s-new').value); });
-    $('s-rekey').addEventListener('click', onRekey);
-    $('s-hint-save').addEventListener('click', onSaveHint);
-    $('s-rc-new').addEventListener('click', onRegenRecovery);
-    $('s-export').addEventListener('click', onExport);
-    $('s-import').addEventListener('change', onImport);
-    $('s-log-load').addEventListener('click', onLoadLog);
-    $('s-lock').addEventListener('click', onEmergencyLock);
-
     document.querySelectorAll('[data-close]').forEach(function (b) {
       b.addEventListener('click', function () { closeSheet(b.closest('.sheet').id); });
     });
@@ -959,7 +596,7 @@
       document.addEventListener(evName, resetLockTimer, { passive: true, capture: true });
     });
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'hidden' && (state.vk || state.recoverRaw || state.pending)) lock('切換到其他畫面，已自動鎖定');
+      if (document.visibilityState === 'hidden' && state.vk) lock('切換到其他畫面，已自動鎖定');
     });
   }
 
