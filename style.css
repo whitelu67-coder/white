@@ -117,7 +117,7 @@ a { color: var(--blue); word-break: break-all; }
 .mini { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 16px; cursor: pointer; flex: none; }
 
 /* 清單畫面 */
-.screen-list { padding: 0 0 96px; }
+.screen-list { padding: 0 0 32px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 4px; }
 .topbar h1 { margin: 0; }
 .searchbar { padding: 8px 16px; position: sticky; top: 0; background: var(--bg); z-index: 2; }
@@ -135,14 +135,12 @@ a { color: var(--blue); word-break: break-all; }
   padding: 12px 14px; margin: 6px 0; text-align: left; font-family: inherit; color: var(--text); cursor: pointer;
 }
 .item-name { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-main { flex: 1; min-width: 0; }
+.item-owner { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .item-sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-arrow { color: var(--muted); flex: none; }
 .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
-.fab {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom));
-  background: var(--green); color: #fff; border: none; border-radius: 999px; padding: 14px 32px;
-  font-size: 17px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.2); cursor: pointer; z-index: 5;
-}
+.add-btn { background: var(--green); color: #fff; border: none; border-radius: 999px; padding: 8px 16px; font-size: 15px; font-weight: 700; cursor: pointer; }
 
 /* 下方滑出的面板 */
 .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }

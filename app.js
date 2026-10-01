@@ -9,7 +9,7 @@
 //   ・主密碼、金鑰、明文只在這個網頁的記憶體裡，不存 localStorage、不寫 console
 //   ・解鎖只解開「摘要」；帳號密碼點開那一筆才下載、才解密，關掉就清掉
 //   ・畫面一律用 textContent 放資料，不用 innerHTML，資料裡就算有 HTML 也不會被執行
-//   ・5 分鐘沒動作、或切到別的 App，就清掉金鑰鎖定
+//   ・5 分鐘沒動作、或切到別的 App 超過 2 分鐘，就清掉金鑰鎖定
 // ============================================================
 (function () {
   'use strict';
@@ -33,6 +33,9 @@
     vk: null,          // 密碼本金鑰（CryptoKey，不可匯出）
     encrypted: null,   // 還沒解開的摘要
     items: [],         // [{ id, rev, updatedAt, updatedBy, s: 摘要明文 }]
+    owners: [],        // 歸屬者下拉選項（GAS 的 VAULT_OWNERS，輸入主密碼後才拿得到）
+    me: '',            // 自己對應的歸屬者（新增時預設選這個）
+    filterOwner: '',
     filterCat: '',
     detail: null,
     editing: null,
@@ -221,8 +224,7 @@
   }
 
   function showUnlock(errorText) {
-    $('unlock-hint-btn').hidden = !(state.meta && state.meta.hint);
-    $('unlock-hint').hidden = true;
+    $('unlock-hint').hidden = !(state.meta && state.meta.hint);   // 有設定提示就直接顯示
     $('unlock-hint').textContent = state.meta && state.meta.hint ? '💡 ' + state.meta.hint : '';
     setError('unlock-error', errorText || '');
     show('screen-unlock');
@@ -251,6 +253,8 @@
       state.vk = await VC.importVaultKey(raw);
       VC.wipe(raw);
       state.session = res.session;
+      state.owners = res.owners || [];
+      state.me = res.me || '';
       $('unlock-pw').value = '';
       state.encrypted = res.entries;
       await decryptIndex();
@@ -289,6 +293,9 @@
     state.vk = null;
     state.session = null;
     state.items = [];
+    state.owners = [];
+    state.me = '';
+    state.filterOwner = '';
     state.encrypted = null;
     ['sheet-detail', 'sheet-edit'].forEach(closeSheet);
     ['search', 'unlock-pw'].forEach(function (id) { $(id).value = ''; });
@@ -321,12 +328,25 @@
       b.addEventListener('click', function () { state.filterCat = c.key; renderList(); });
       box.appendChild(b);
     });
+    // 歸屬者：名單＋舊資料裡出現過的
+    const names = state.owners.slice();
+    state.items.forEach(function (it) { if (it.s.owner && names.indexOf(it.s.owner) < 0) names.push(it.s.owner); });
+    const ob = $('owner-chips');
+    ob.textContent = '';
+    ob.hidden = !names.length;
+    [{ key: '', label: '👤 全部' }].concat(names.map(function (n) { return { key: n, label: n }; })).forEach(function (c) {
+      const b = el('button', 'chip' + (state.filterOwner === c.key ? ' on' : ''), c.label);
+      b.type = 'button';
+      b.addEventListener('click', function () { state.filterOwner = c.key; renderList(); });
+      ob.appendChild(b);
+    });
   }
 
   function matches(item, q) {
     if (state.filterCat && item.s.category !== state.filterCat) return false;
+    if (state.filterOwner && item.s.owner !== state.filterOwner) return false;
     if (!q) return true;
-    const hay = [item.s.name, item.s.subcategory, item.s.url, item.s.note, catLabel(item.s.category)].join(' ').toLowerCase();
+    const hay = [item.s.name, item.s.owner, item.s.subcategory, item.s.url, item.s.note, catLabel(item.s.category)].join(' ').toLowerCase();
     return q.toLowerCase().split(/\s+/).filter(Boolean).every(function (w) { return hay.indexOf(w) >= 0; });
   }
 
@@ -338,7 +358,7 @@
     list.textContent = '';
     const shown = state.items.filter(function (it) { return matches(it, q); });
     if (!shown.length) {
-      list.appendChild(el('div', 'empty', state.items.length ? '找不到符合的項目' : '還沒有任何資料，按下面的「＋ 新增」開始'));
+      list.appendChild(el('div', 'empty', state.items.length ? '找不到符合的項目' : '還沒有任何資料，按右上角的「＋ 新增」開始'));
       return;
     }
     // 分類 → 小分類 → 名稱
@@ -355,11 +375,12 @@
           const b = el('button', 'item');
           b.type = 'button';
           const left = el('div');
-          left.style.minWidth = '0';
+          left.className = 'item-main';
           left.appendChild(el('div', 'item-name', it.s.name));
           const extra = [it.s.url ? it.s.url.replace(/^https?:\/\//, '') : '', it.s.note].filter(Boolean).join('・');
           if (extra) left.appendChild(el('div', 'item-sub', extra));
           b.appendChild(left);
+          if (it.s.owner) b.appendChild(el('span', 'item-owner', '歸屬者：' + it.s.owner));   // 放在卡片右邊
           b.appendChild(el('span', 'item-arrow', '›'));
           b.addEventListener('click', function () { openDetail(it); });
           g.appendChild(b);
@@ -378,6 +399,8 @@
     state.detail = { item: item, secret: null };
     $('d-name').textContent = item.s.name;
     $('d-cat').textContent = catLabel(item.s.category) + (item.s.subcategory ? ' › ' + item.s.subcategory : '');
+    $('d-owner-row').hidden = !item.s.owner;
+    $('d-owner').textContent = item.s.owner || '';
     $('d-user').textContent = '解密中…';
     $('d-pass').textContent = '••••••••';
     $('d-url-row').hidden = !item.s.url;
@@ -446,6 +469,20 @@
     });
   }
 
+  /** 歸屬者：GAS 設定的名單；舊資料的歸屬者如果已經不在名單裡，也保留成一個選項 */
+  function fillOwnerSelect(current) {
+    const sel = $('e-owner');
+    sel.textContent = '';
+    const names = state.owners.slice();
+    if (current && names.indexOf(current) < 0) names.push(current);
+    [''].concat(names).forEach(function (n) {
+      const o = el('option', null, n || '（未指定）');
+      o.value = n;
+      sel.appendChild(o);
+    });
+    sel.value = current || '';
+  }
+
   /** 小分類：建議同一個分類裡用過的（避免「台新」「台新銀行」各打一種） */
   function fillSubSuggestions() {
     const cat = $('e-cat').value;
@@ -462,6 +499,7 @@
     state.editing = item ? { item: item } : null;
     $('e-title').textContent = item ? '✏️ 修改' : '＋ 新增';
     $('e-name').value = item ? item.s.name : '';
+    fillOwnerSelect(item ? item.s.owner : (state.filterOwner || state.me));
     $('e-cat').value = item ? (item.s.category || 'other') : (state.filterCat || 'finance');
     $('e-sub').value = item ? (item.s.subcategory || '') : '';
     $('e-url').value = item ? (item.s.url || '') : '';
@@ -485,6 +523,7 @@
   async function onSave() {
     const summary = {
       name: $('e-name').value.trim(),
+      owner: $('e-owner').value,
       category: $('e-cat').value,
       subcategory: $('e-sub').value.trim(),
       url: $('e-url').value.trim(),
@@ -554,11 +593,9 @@
 
   function bind() {
     $('unlock-form').addEventListener('submit', onUnlock);
-    $('unlock-hint-btn').addEventListener('click', function () { $('unlock-hint').hidden = !$('unlock-hint').hidden; });
     $('message-retry').addEventListener('click', function () { location.reload(); });
     $('message-relogin').addEventListener('click', relogin);
 
-    $('btn-lock').addEventListener('click', function () { lock('已鎖定'); });
     $('btn-add').addEventListener('click', function () { openEdit(null, null); });
     $('search').addEventListener('input', renderList);
 
@@ -591,8 +628,12 @@
     ['pointerdown', 'keydown', 'input', 'scroll'].forEach(function (evName) {
       document.addEventListener(evName, resetLockTimer, { passive: true, capture: true });
     });
+    // 切到別的 App（例如去貼上剛複製的密碼）：2 分鐘內回來不用重新輸入主密碼，超過才鎖定
+    let hiddenAt = 0;
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'hidden' && state.vk) lock('切換到其他畫面，已自動鎖定');
+      if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+      if (state.vk && hiddenAt && Date.now() - hiddenAt > (CFG.AWAY_LOCK_MS || 120000)) lock('離開超過 2 分鐘，已自動鎖定');
+      hiddenAt = 0;
     });
   }
 

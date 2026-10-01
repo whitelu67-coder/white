@@ -33,7 +33,6 @@
         <h1>🔐 密碼本</h1>
         <form id="unlock-form" autocomplete="off">
           <div class="float"><input id="unlock-pw" type="password" autocomplete="current-password" placeholder=" "><label for="unlock-pw">主密碼</label></div>
-          <button id="unlock-hint-btn" class="link-btn" type="button" hidden>💡 顯示提示</button>
           <p id="unlock-hint" class="hint-box" hidden></p>
           <p id="unlock-error" class="error" hidden></p>
           <button id="unlock-submit" class="btn btn-primary" type="submit">解鎖</button>
@@ -46,15 +45,15 @@
       <header class="topbar">
         <h1>🔐 密碼本</h1>
         <div class="topbar-actions">
-          <button id="btn-lock" class="icon-btn" type="button" aria-label="立即鎖定">🔒</button>
+          <button id="btn-add" class="add-btn" type="button">＋ 新增</button>
         </div>
       </header>
       <div class="searchbar">
         <input id="search" type="search" placeholder="🔍 搜尋（例如：台新）" autocomplete="off">
       </div>
       <nav id="chips" class="chips"></nav>
+      <nav id="owner-chips" class="chips" hidden></nav>
       <div id="list" class="list"></div>
-      <button id="btn-add" class="fab" type="button">＋ 新增</button>
     </section>
   </main>
 
@@ -85,6 +84,10 @@
         <div class="kv-label">備註</div>
         <div class="kv-value"><span id="d-note" class="pre"></span></div>
       </div>
+      <div class="kv" id="d-owner-row">
+        <div class="kv-label">歸屬者</div>
+        <div class="kv-value"><span id="d-owner"></span></div>
+      </div>
       <p id="d-meta" class="hint"></p>
       <div class="row">
         <button id="d-edit" class="btn btn-outline green" type="button">✏️ 修改</button>
@@ -101,6 +104,7 @@
         <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
       </div>
       <div class="float"><input id="e-name" type="text" maxlength="60" placeholder=" "><label for="e-name">名稱（必填）</label></div>
+      <div class="float fixed"><select id="e-owner"></select><label for="e-owner">歸屬者</label></div>
       <div class="row">
         <div class="float fixed"><select id="e-cat"></select><label for="e-cat">分類</label></div>
         <div class="float"><input id="e-sub" type="text" maxlength="30" list="e-sub-list" placeholder=" "><label for="e-sub">小分類</label></div>

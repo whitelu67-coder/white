@@ -6,6 +6,8 @@ window.VAULT_CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbyqfNGc8Y9pEqEnPc7XimXpeNaI3zSQYhrUS2GAOj2NBhXc-9a8qNuQr68D0jvC1lZ1gA/exec',
   // 5 分鐘沒動作自動鎖定
   AUTO_LOCK_MS: 5 * 60 * 1000,
+  // 切到別的 App（例如去貼上密碼）超過 2 分鐘才鎖定；2 分鐘內回來不用重新輸入主密碼
+  AWAY_LOCK_MS: 2 * 60 * 1000,
   // 顯示密碼 30 秒後自動遮住
   REVEAL_MS: 30 * 1000,
   // 只在 localhost 預覽時生效：用假的 LINE 身分和假的後端，方便在電腦上測畫面
