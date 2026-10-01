@@ -3,7 +3,7 @@ window.VAULT_CONFIG = {
   // LINE Developers → LINE Login channel → LIFF 分頁的 LIFF ID，例如 '2001234567-AbCdEfGh'
   LIFF_ID: '2011821081-fqDntHsl',
   // 密碼本 GAS 部署後的網頁應用程式網址（…/exec）
-  API_URL: '',
+  API_URL: 'https://script.google.com/macros/s/AKfycbyqfNGc8Y9pEqEnPc7XimXpeNaI3zSQYhrUS2GAOj2NBhXc-9a8qNuQr68D0jvC1lZ1gA/exec',
   // 5 分鐘沒動作自動鎖定
   AUTO_LOCK_MS: 5 * 60 * 1000,
   // 顯示密碼 30 秒後自動遮住
