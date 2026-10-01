@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
   <title>密碼本</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <main id="app">
@@ -45,11 +45,19 @@
       <header class="topbar">
         <h1>🔐 密碼本</h1>
         <div class="topbar-actions">
-          <button id="btn-add" class="add-btn" type="button">＋ 新增</button>
+          <button id="btn-add" class="add-btn" type="button">＋ 新增項目</button>
         </div>
       </header>
       <div class="searchbar">
-        <input id="search" type="search" placeholder="🔍 搜尋（例如：台新）" autocomplete="off">
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="🔍 搜尋帳號..." autocomplete="off">
+          <button id="search-clear" class="search-clear" type="button" aria-label="清除搜尋" hidden>✕</button>
+        </div>
+        <div id="owner-wrap" class="select-wrap">
+          <select id="filter-owner" aria-label="篩選擁有人">
+            <option value="">👤 所有人</option>
+          </select>
+        </div>
       </div>
       <nav id="chips" class="chips"></nav>
       <nav id="owner-chips" class="chips" hidden></nav>
@@ -62,7 +70,10 @@
     <div class="sheet-body">
       <div class="sheet-head">
         <h2 id="d-name"></h2>
-        <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
+        <div class="sheet-head-actions">
+          <button id="d-fav" class="fav-btn" type="button" aria-label="加入常用">☆</button>
+          <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
+        </div>
       </div>
       <p id="d-cat" class="muted"></p>
       <div class="kv">
@@ -85,7 +96,7 @@
         <div class="kv-value"><span id="d-note" class="pre"></span></div>
       </div>
       <div class="kv" id="d-owner-row">
-        <div class="kv-label">歸屬者</div>
+        <div class="kv-label">擁有人</div>
         <div class="kv-value"><span id="d-owner"></span></div>
       </div>
       <p id="d-meta" class="hint"></p>
@@ -100,14 +111,17 @@
   <div id="sheet-edit" class="sheet" hidden>
     <div class="sheet-body">
       <div class="sheet-head">
-        <h2 id="e-title">新增</h2>
+        <div class="sheet-title-row">
+          <h2 id="e-title">＋ 新增項目</h2>
+          <span id="e-name-warn" class="head-warn" hidden>請輸入項目名稱</span>
+        </div>
         <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
       </div>
-      <div class="float"><input id="e-name" type="text" maxlength="60" placeholder=" "><label for="e-name">名稱（必填）</label></div>
-      <div class="float fixed"><select id="e-owner"></select><label for="e-owner">歸屬者</label></div>
+      <div class="float"><input id="e-name" type="text" maxlength="60" placeholder=" "><label for="e-name">項目名稱（必填）</label></div>
+      <div class="float fixed"><select id="e-owner"></select><label for="e-owner">擁有人</label></div>
       <div class="row">
         <div class="float fixed"><select id="e-cat"></select><label for="e-cat">分類</label></div>
-        <div class="float"><input id="e-sub" type="text" maxlength="30" list="e-sub-list" placeholder=" "><label for="e-sub">小分類</label></div>
+        <div class="float"><input id="e-sub" type="text" maxlength="30" list="e-sub-list" placeholder=" "><label for="e-sub">標籤</label></div>
         <datalist id="e-sub-list"></datalist>
       </div>
       <div class="float"><input id="e-user" type="text" autocomplete="off" placeholder=" "><label for="e-user">帳號 <span class="label-note">（儲存會做加密）</span></label></div>
@@ -115,7 +129,7 @@
         <button id="e-pass-toggle" class="mini" type="button" aria-label="顯示密碼">👁️</button></div>
       <div class="float"><input id="e-url" type="url" maxlength="300" placeholder=" "><label for="e-url">網址</label></div>
       <div class="float"><textarea id="e-note" rows="3" maxlength="1000" placeholder=" "></textarea><label for="e-note">備註</label></div>
-      <p class="hint">⚠️ 只有帳號、密碼會加密；名稱、網址、備註直接存在試算表，請不要寫密碼或安全提問的答案。</p>
+      <p class="hint">⚠️ 只有帳號、密碼會加密；項目名稱、網址、備註直接存在試算表，請不要寫密碼或安全提問的答案。</p>
       <p id="e-error" class="error" hidden></p>
       <button id="e-save" class="btn btn-primary" type="button">儲存</button>
     </div>
@@ -126,6 +140,6 @@
   <script src="config.js"></script>
   <script src="vault-crypto.js"></script>
   <script src="vendor/liff-sdk-2.31.0.js" integrity="sha384-T6WhT96rkehAFkTtmiRZ60sehxj4zgbifvzi7oGH792T3NN++f2rCvyb/WrHAz2D"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

@@ -37,6 +37,7 @@
     items: [],         // [{ id, rev, updatedAt, updatedBy, s: 摘要明文 }]
     owners: [],        // 歸屬者下拉選項（GAS 的 VAULT_OWNERS，輸入主密碼後才拿得到）
     me: '',            // 自己對應的歸屬者（新增時預設選這個）
+    favs: [],          // 常用項目 id 清單（從後端讀來，不存 localStorage）
     filterOwner: '',
     filterCat: '',
     detail: null,
@@ -257,6 +258,7 @@
       state.session = res.session;
       state.owners = res.owners || [];
       state.me = res.me || '';
+      state.favs = res.favs || [];
       state.filterOwner = state.me;   // 打開時，歸屬者篩選預設選自己（按「👤 全部」看全部）
       $('unlock-pw').value = '';
       state.encrypted = res.entries;
@@ -300,10 +302,14 @@
     state.items = [];
     state.owners = [];
     state.me = '';
+    state.favs = [];
     state.filterOwner = '';
     state.encrypted = null;
     ['sheet-detail', 'sheet-edit'].forEach(closeSheet);
     ['search', 'unlock-pw'].forEach(function (id) { $(id).value = ''; });
+    if ($('search-clear')) $('search-clear').hidden = true;
+    if ($('filter-owner')) $('filter-owner').value = '';
+    if ($('owner-wrap')) $('owner-wrap').classList.remove('active');
     $('list').textContent = '';
     clearTimeout(state.lockTimer);
   }
@@ -321,50 +327,142 @@
   }
 
   // ============================================================
+  // 常用項目（存在後端 GAS，每個人各自一份）
+  // ============================================================
+
+  function isFavorite(id) {
+    return state.favs.indexOf(id) >= 0;
+  }
+
+  function toggleFavorite(id) {
+    const idx = state.favs.indexOf(id);
+    if (idx >= 0) {
+      state.favs.splice(idx, 1);
+    } else {
+      state.favs.unshift(id);
+    }
+    const added = idx < 0;
+    // 非同步送後端，不擋畫面更新
+    api('saveFavs', { favs: state.favs.slice() }).catch(function () {});
+    return added;
+  }
+
+  function updateFavBtn() {
+    if (!state.detail || !state.detail.item) return;
+    const isFav = isFavorite(state.detail.item.id);
+    const b = $('d-fav');
+    if (!b) return;
+    b.textContent = isFav ? '⭐' : '☆';
+    b.classList.toggle('on', isFav);
+    b.setAttribute('aria-label', isFav ? '取消常用' : '加入常用');
+  }
+
+  // ============================================================
   // 清單
   // ============================================================
 
   function renderChips() {
     const box = $('chips');
     box.textContent = '';
-    [{ key: '', label: '全部' }].concat(CATEGORIES).forEach(function (c) {
+    const allChips = [{ key: '', label: '全部' }, { key: 'fav', label: '⭐ 常用' }].concat(CATEGORIES);
+    allChips.forEach(function (c) {
       const b = el('button', 'chip' + (state.filterCat === c.key ? ' on' : ''), c.label);
       b.type = 'button';
       b.addEventListener('click', function () { state.filterCat = c.key; renderList(); });
       box.appendChild(b);
     });
-    // 歸屬者：名單＋舊資料裡出現過的
+    const ob = $('owner-chips');
+    if (ob) ob.hidden = true;
+  }
+
+  function renderOwnerSelect() {
+    const wrap = $('owner-wrap');
+    if (!wrap) return;
     const names = state.owners.slice();
     state.items.forEach(function (it) { if (it.s.owner && names.indexOf(it.s.owner) < 0) names.push(it.s.owner); });
-    const ob = $('owner-chips');
-    ob.textContent = '';
-    ob.hidden = !names.length;
-    [{ key: '', label: '👤 全部' }].concat(names.map(function (n) { return { key: n, label: n }; })).forEach(function (c) {
-      const b = el('button', 'chip' + (state.filterOwner === c.key ? ' on' : ''), c.label);
-      b.type = 'button';
-      b.addEventListener('click', function () { state.filterOwner = c.key; renderList(); });
-      ob.appendChild(b);
+    if (!names.length) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    const sel = $('filter-owner');
+    const currentVal = state.filterOwner;
+    sel.textContent = '';
+    const optAll = el('option', null, '👤 所有人');
+    optAll.value = '';
+    sel.appendChild(optAll);
+    names.forEach(function (n) {
+      const label = n === state.me ? '👤 ' + n + ' (我)' : '👤 ' + n;
+      const o = el('option', null, label);
+      o.value = n;
+      sel.appendChild(o);
     });
+    sel.value = currentVal;
+    wrap.classList.toggle('active', !!currentVal);
   }
 
   function matches(item, q) {
-    if (state.filterCat && item.s.category !== state.filterCat) return false;
+    if (state.filterCat === 'fav') {
+      if (!isFavorite(item.id)) return false;
+    } else if (state.filterCat && item.s.category !== state.filterCat) {
+      return false;
+    }
     if (state.filterOwner && item.s.owner !== state.filterOwner) return false;
     if (!q) return true;
     const hay = [item.s.name, item.s.owner, item.s.subcategory, item.s.url, item.s.note, catLabel(item.s.category)].join(' ').toLowerCase();
     return q.toLowerCase().split(/\s+/).filter(Boolean).every(function (w) { return hay.indexOf(w) >= 0; });
   }
 
+  function createItemButton(it) {
+    const b = el('button', 'item');
+    b.type = 'button';
+    const left = el('div');
+    left.className = 'item-main';
+    const nameWrap = el('div', 'item-name');
+    if (isFavorite(it.id)) {
+      nameWrap.appendChild(el('span', 'item-star', '⭐ '));
+    }
+    nameWrap.appendChild(document.createTextNode(it.s.name));
+    left.appendChild(nameWrap);
+    const extra = [it.s.url ? it.s.url.replace(/^https?:\/\//, '') : '', it.s.note].filter(Boolean).join('・');
+    if (extra) left.appendChild(el('div', 'item-sub', extra));
+    b.appendChild(left);
+    if (it.s.owner) b.appendChild(el('span', 'item-owner', '擁有人：' + it.s.owner));
+    b.appendChild(el('span', 'item-arrow', '›'));
+    b.addEventListener('click', function () { openDetail(it); });
+    return b;
+  }
+
   function renderList() {
     show('screen-list');
     renderChips();
+    renderOwnerSelect();
     const q = $('search').value.trim();
     const list = $('list');
     list.textContent = '';
     const shown = state.items.filter(function (it) { return matches(it, q); });
     if (!shown.length) {
-      list.appendChild(el('div', 'empty', state.items.length ? '找不到符合的項目' : '還沒有任何資料，按右上角的「＋ 新增」開始'));
+      if (state.filterCat === 'fav') {
+        list.appendChild(el('div', 'empty', '目前還沒有加入常用項目\n點開任何項目按右上角「☆」即可加入'));
+      } else {
+        list.appendChild(el('div', 'empty', state.items.length ? '找不到符合的項目' : '還沒有任何資料，按右上角的「＋ 新增項目」開始'));
+      }
       return;
+    }
+    // 常用分組：選了「⭐ 常用」或在「全部」且有常用項目時置頂顯示
+    const favItems = shown.filter(function (it) { return isFavorite(it.id); });
+    if (state.filterCat === 'fav') {
+      const g = el('div', 'group group-fav');
+      g.appendChild(el('div', 'group-title', '⭐ 常用項目（' + favItems.length + '）'));
+      favItems.forEach(function (it) { g.appendChild(createItemButton(it)); });
+      list.appendChild(g);
+      return;
+    }
+    if (!state.filterCat && favItems.length) {
+      const g = el('div', 'group group-fav');
+      g.appendChild(el('div', 'group-title', '⭐ 常用項目（' + favItems.length + '）'));
+      favItems.forEach(function (it) { g.appendChild(createItemButton(it)); });
+      list.appendChild(g);
     }
     // 分類 → 小分類 → 名稱
     CATEGORIES.forEach(function (c) {
@@ -377,18 +475,7 @@
       Object.keys(subs).sort(function (a, b) { return (a === '') - (b === '') || a.localeCompare(b, 'zh-Hant'); }).forEach(function (sub) {
         if (sub) g.appendChild(el('div', 'sub-title', '› ' + sub));
         subs[sub].sort(function (a, b) { return a.s.name.localeCompare(b.s.name, 'zh-Hant'); }).forEach(function (it) {
-          const b = el('button', 'item');
-          b.type = 'button';
-          const left = el('div');
-          left.className = 'item-main';
-          left.appendChild(el('div', 'item-name', it.s.name));
-          const extra = [it.s.url ? it.s.url.replace(/^https?:\/\//, '') : '', it.s.note].filter(Boolean).join('・');
-          if (extra) left.appendChild(el('div', 'item-sub', extra));
-          b.appendChild(left);
-          if (it.s.owner) b.appendChild(el('span', 'item-owner', '歸屬者：' + it.s.owner));   // 放在卡片右邊
-          b.appendChild(el('span', 'item-arrow', '›'));
-          b.addEventListener('click', function () { openDetail(it); });
-          g.appendChild(b);
+          g.appendChild(createItemButton(it));
         });
       });
       list.appendChild(g);
@@ -414,6 +501,7 @@
     $('d-note-row').hidden = !item.s.note;
     $('d-note').textContent = item.s.note || '';
     $('d-meta').textContent = '最後修改：' + (item.updatedBy || '') + ' ' + fmtTime(item.updatedAt);
+    updateFavBtn();
     openSheet('sheet-detail');
     try {
       const res = await api('getSecret', { id: item.id });
@@ -502,7 +590,8 @@
 
   function openEdit(item, secret) {
     state.editing = item ? { item: item } : null;
-    $('e-title').textContent = item ? '✏️ 修改' : '＋ 新增';
+    $('e-title').textContent = item ? '✏️ 修改項目' : '＋ 新增項目';
+    $('e-name-warn').hidden = true;
     $('e-name').value = item ? item.s.name : '';
     fillOwnerSelect(item ? item.s.owner : (state.filterOwner || state.me));
     $('e-cat').value = item ? (item.s.category || 'other') : (state.filterCat || 'finance');
@@ -522,6 +611,7 @@
 
   function clearEdit() {
     state.editing = null;
+    $('e-name-warn').hidden = true;
     ['e-name', 'e-sub', 'e-url', 'e-note', 'e-user', 'e-pass'].forEach(function (id) { $(id).value = ''; });
   }
 
@@ -535,7 +625,12 @@
       note: $('e-note').value.trim()
     };
     const secret = { username: $('e-user').value, password: $('e-pass').value };
-    if (!summary.name) return setError('e-error', '請輸入名稱');
+    if (!summary.name) {
+      $('e-name-warn').hidden = false;
+      $('e-name').focus();
+      return;
+    }
+    $('e-name-warn').hidden = true;
     if (summary.url && !/^https?:\/\//i.test(summary.url)) return setError('e-error', '網址要用 http:// 或 https:// 開頭');
     setError('e-error', '');
     const item = state.editing && state.editing.item;
@@ -602,9 +697,29 @@
     $('message-relogin').addEventListener('click', relogin);
 
     $('btn-add').addEventListener('click', function () { openEdit(null, null); });
-    $('search').addEventListener('input', renderList);
+    $('search').addEventListener('input', function () {
+      $('search-clear').hidden = !$('search').value;
+      renderList();
+    });
+    $('search-clear').addEventListener('click', function () {
+      $('search').value = '';
+      $('search-clear').hidden = true;
+      $('search').focus();
+      renderList();
+    });
+    $('filter-owner').addEventListener('change', function () {
+      state.filterOwner = this.value;
+      renderList();
+    });
 
     $('d-reveal').addEventListener('click', toggleReveal);
+    $('d-fav').addEventListener('click', function () {
+      if (!state.detail || !state.detail.item) return;
+      const added = toggleFavorite(state.detail.item.id);
+      updateFavBtn();
+      renderList();
+      toast(added ? '⭐ 已加入常用' : '已從常用移除');
+    });
     $('d-copy-user').addEventListener('click', function () { if (state.detail && state.detail.secret) copyText(state.detail.secret.username || ''); });
     $('d-copy-pass').addEventListener('click', function () { if (state.detail && state.detail.secret) copyText(state.detail.secret.password || ''); });
     $('d-edit').addEventListener('click', function () { const d = state.detail; if (d && d.secret) openEdit(d.item, d.secret); });
@@ -620,6 +735,7 @@
     fillCategorySelect();
     $('e-cat').addEventListener('change', fillSubSuggestions);
     $('e-save').addEventListener('click', onSave);
+    $('e-name').addEventListener('input', function () { $('e-name-warn').hidden = true; });
     $('e-pass-toggle').addEventListener('click', function () { const p = $('e-pass'); p.type = p.type === 'password' ? 'text' : 'password'; });
 
     document.querySelectorAll('[data-close]').forEach(function (b) {
