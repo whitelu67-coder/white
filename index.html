@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
   <title>密碼本</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <main id="app">
@@ -69,11 +69,11 @@
   <div id="sheet-detail" class="sheet" hidden>
     <div class="sheet-body">
       <div class="sheet-head">
-        <h2 id="d-name"></h2>
-        <div class="sheet-head-actions">
+        <div class="sheet-head-left">
           <button id="d-fav" class="fav-btn" type="button" aria-label="加入常用">☆</button>
-          <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
+          <h2 id="d-name"></h2>
         </div>
+        <button class="icon-btn" data-close type="button" aria-label="關閉">✕</button>
       </div>
       <p id="d-cat" class="muted"></p>
       <div class="kv">
@@ -135,11 +135,23 @@
     </div>
   </div>
 
+  <!-- 對話框 (取代系統 alert / confirm) -->
+  <div id="dlg-overlay" class="dlg-overlay" hidden>
+    <div class="dlg-card">
+      <div id="dlg-title" class="dlg-title">確認</div>
+      <div id="dlg-msg" class="dlg-msg"></div>
+      <div class="dlg-actions">
+        <button id="dlg-cancel" class="btn btn-outline" type="button">取消</button>
+        <button id="dlg-ok" class="btn btn-primary" type="button">確定</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
 
   <script src="config.js"></script>
   <script src="vault-crypto.js"></script>
   <script src="vendor/liff-sdk-2.31.0.js" integrity="sha384-T6WhT96rkehAFkTtmiRZ60sehxj4zgbifvzi7oGH792T3NN++f2rCvyb/WrHAz2D"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

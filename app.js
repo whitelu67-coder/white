@@ -97,6 +97,45 @@
     toastTimer = setTimeout(function () { t.hidden = true; }, 2400);
   }
 
+  function showConfirm(msg, title) {
+    return new Promise(function (resolve) {
+      const ov = $('dlg-overlay');
+      $('dlg-title').textContent = title || '確認';
+      $('dlg-msg').textContent = msg;
+      $('dlg-cancel').hidden = false;
+      ov.hidden = false;
+
+      function cleanup(res) {
+        ov.hidden = true;
+        $('dlg-ok').removeEventListener('click', onOk);
+        $('dlg-cancel').removeEventListener('click', onCancel);
+        resolve(res);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+
+      $('dlg-ok').addEventListener('click', onOk);
+      $('dlg-cancel').addEventListener('click', onCancel);
+    });
+  }
+
+  function showAlert(msg, title) {
+    return new Promise(function (resolve) {
+      const ov = $('dlg-overlay');
+      $('dlg-title').textContent = title || '提示';
+      $('dlg-msg').textContent = msg;
+      $('dlg-cancel').hidden = true;
+      ov.hidden = false;
+
+      function onOk() {
+        ov.hidden = true;
+        $('dlg-ok').removeEventListener('click', onOk);
+        resolve();
+      }
+      $('dlg-ok').addEventListener('click', onOk);
+    });
+  }
+
   function openSheet(id) { $(id).hidden = false; }
   function closeSheet(id) {
     $(id).hidden = true;
@@ -464,7 +503,7 @@
       favItems.forEach(function (it) { g.appendChild(createItemButton(it)); });
       list.appendChild(g);
     }
-    // 分類 → 小分類 → 名稱
+    // 分類 → 標籤（小分類）區塊 → 名稱
     CATEGORIES.forEach(function (c) {
       const inCat = shown.filter(function (it) { return (it.s.category || 'other') === c.key; });
       if (!inCat.length) return;
@@ -473,10 +512,21 @@
       const subs = {};
       inCat.forEach(function (it) { const k = it.s.subcategory || ''; (subs[k] = subs[k] || []).push(it); });
       Object.keys(subs).sort(function (a, b) { return (a === '') - (b === '') || a.localeCompare(b, 'zh-Hant'); }).forEach(function (sub) {
-        if (sub) g.appendChild(el('div', 'sub-title', '› ' + sub));
-        subs[sub].sort(function (a, b) { return a.s.name.localeCompare(b.s.name, 'zh-Hant'); }).forEach(function (it) {
-          g.appendChild(createItemButton(it));
-        });
+        const items = subs[sub].sort(function (a, b) { return a.s.name.localeCompare(b.s.name, 'zh-Hant'); });
+        if (sub) {
+          // 有標籤：區塊容器，標籤置於左上角
+          const block = el('div', 'sub-block');
+          block.appendChild(el('div', 'sub-block-tag', '🏷️ ' + sub + '（' + items.length + '）'));
+          items.forEach(function (it) {
+            block.appendChild(createItemButton(it));
+          });
+          g.appendChild(block);
+        } else {
+          // 未分類標籤的項目
+          items.forEach(function (it) {
+            g.appendChild(createItemButton(it));
+          });
+        }
       });
       list.appendChild(g);
     });
@@ -536,7 +586,8 @@
   async function onDelete() {
     const d = state.detail;
     if (!d) return;
-    if (!confirm('確定要刪除「' + d.item.s.name + '」嗎？刪除後無法復原。')) return;
+    const ok = await showConfirm('確定要刪除「' + d.item.s.name + '」嗎？\n刪除後無法復原。', '刪除項目');
+    if (!ok) return;
     try {
       await api('deleteEntry', { id: d.item.id, rev: d.item.rev });
       state.items = state.items.filter(function (x) { return x.id !== d.item.id; });
@@ -654,10 +705,10 @@
     });
   }
 
-  function handleSaveError(e) {
+  async function handleSaveError(e) {
     if (e.handled) return;
     if (e.code === 'CONFLICT' || e.code === 'NOT_FOUND') {
-      alert(e.message + '\n\n會重新讀取最新的資料。');
+      await showAlert(e.message + '\n\n會重新讀取最新的資料。', '資料已被變更');
       ['sheet-detail', 'sheet-edit'].forEach(closeSheet);
       reloadIndex().catch(function (err) { if (!err.handled) toast(err.message); });
     } else {
