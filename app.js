@@ -629,7 +629,9 @@
     $('d-cat').textContent = catLabel(item.s.category) + (item.s.subcategory ? ' › ' + item.s.subcategory : '');
     $('d-owner-row').hidden = !item.s.owner;
     $('d-owner').textContent = item.s.owner || '';
-    $('d-user').textContent = '解密中…';
+    // 帳號密碼在解鎖時就已經解開了 → 直接顯示，不用再跟 GAS 拿
+    state.detail.secret = item.x || null;
+    $('d-user').textContent = item.x ? (item.x.username || '（沒有帳號）') : '（這一筆的帳號密碼解不開）';
     $('d-pass').textContent = '••••••••';
     $('d-url-row').hidden = !item.s.url;
     $('d-url').textContent = item.s.url || '';
@@ -639,15 +641,6 @@
     $('d-meta').textContent = '最後修改：' + (item.updatedBy || '') + ' ' + fmtTime(item.updatedAt);
     updateFavBtn();
     openSheet('sheet-detail');
-    try {
-      const res = await api('getSecret', { id: item.id });
-      if (!state.detail || state.detail.item !== item) return;   // 等待中已經關掉了
-      item.rev = res.rev;
-      state.detail.secret = await VC.decryptSecret(state.vk, item.id, res.secret.iv, res.secret.data);
-      $('d-user').textContent = state.detail.secret.username || '（沒有帳號）';
-    } catch (e) {
-      if (!e.handled) $('d-user').textContent = '讀取失敗：' + (e.message || '');
-    }
   }
 
   function clearDetail() {
