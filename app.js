@@ -637,7 +637,7 @@
       } else {
         block = el('div', 'sub-block sub-block-plain');
       }
-      items.forEach(function (it) { block.appendChild(createItemButton(it)); });
+      items.forEach(function (it, i) { block.appendChild(stripe(createItemButton(it), i)); });
       list.appendChild(block);
     });
   }
@@ -661,9 +661,15 @@
     const ids = shown.map(function (it) { return it.id; });
     const block = el('div', 'sub-block sub-block-plain' + (state.sortingFavs ? ' sorting' : ''));
     shown.forEach(function (it, i) {
-      block.appendChild(createItemButton(it, state.sortingFavs ? { first: i === 0, last: i === shown.length - 1, ids: ids } : null));
+      block.appendChild(stripe(createItemButton(it, state.sortingFavs ? { first: i === 0, last: i === shown.length - 1, ids: ids } : null), i));
     });
     list.appendChild(block);
+  }
+
+  /** 同一個區塊裡，雙數列（第 2、4、6…筆）加淡灰底，單雙列分得開 */
+  function stripe(row, i) {
+    if (i % 2 === 1) row.classList.add('item-alt');
+    return row;
   }
 
   /** 跟畫面上相鄰的那一筆交換位置（有篩選擁有人時，只跟看得到的交換） */

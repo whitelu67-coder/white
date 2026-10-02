@@ -4,6 +4,7 @@
   --text: #111827;
   --muted: #6B7280;
   --line: #E5E7EB;
+  --stripe: #F9FAFB;   /* 雙數列的淡灰：比底色 --bg 再淡一階，不會跟底色混在一起 */
   --green: #16A34A;
   --blue: #2563EB;
   --red: #DC2626;
@@ -18,6 +19,7 @@
     --text: #F9FAFB;
     --muted: #9CA3AF;
     --line: #374151;
+    --stripe: #263244;   /* 深色模式：比卡片 --card 亮一點 */
   }
 }
 
@@ -256,6 +258,7 @@ a { color: var(--blue); word-break: break-all; }
 .item:last-child { border-bottom: none; border-radius: 0 0 14px 14px; }
 .item:first-of-type { border-radius: 14px 14px 0 0; }
 .item:only-child { border-radius: 14px; }
+.item.item-alt { background: var(--stripe); }   /* 同一個區塊裡的雙數列 */
 .item:active { background: rgba(0, 0, 0, 0.04); }
 
 /* 未在標籤區塊內的獨立項目（無小分類時） */
