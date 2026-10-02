@@ -179,9 +179,12 @@ a { color: var(--blue); word-break: break-all; }
   padding-top: 0;
   margin: 10px 0 14px;
 }
-/* 單數區塊：淡綠邊框微調 */
+/* 有標籤的區塊：單數淡綠、雙數淡藍（跟標籤同色系）；沒有標籤的維持灰色 */
 .sub-block.sub-block-alt {
   border-color: #86EFAC;
+}
+.sub-block:not(.sub-block-alt):not(.sub-block-plain) {
+  border-color: #93C5FD;
 }
 .sub-block-tag {
   position: absolute;
