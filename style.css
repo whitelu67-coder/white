@@ -231,14 +231,10 @@ a { color: var(--blue); word-break: break-all; }
 .item-arrow { color: var(--muted); flex: none; font-size: 18px; margin-left: 2px; }
 .item-star { font-size: 14px; margin-right: 2px; }
 
-/* 列表快捷複製密碼按鈕 */
-.item-quick-btn {
-  flex: none; background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.35);
-  color: var(--green); border-radius: 8px; font-size: 13px; font-weight: 700;
-  padding: 5px 9px; cursor: pointer; transition: all .15s ease; line-height: 1.2;
-}
-.item-quick-btn:active { background: var(--green); color: #fff; transform: scale(0.95); }
-.item-quick-btn:disabled { opacity: 0.7; cursor: default; }
+/* 卡片的帳號、密碼（副標題） */
+.item-cred { display: flex; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 2px; min-width: 0; }
+.item-cred-label { flex: none; }
+.item-cred-value { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
 /* 搜尋關鍵字高亮 */
 mark.highlight { background: #FEF08A; color: #854D0E; padding: 0 1px; border-radius: 2px; font-weight: 700; }

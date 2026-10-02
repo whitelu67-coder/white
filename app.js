@@ -286,6 +286,7 @@
   }
 
   function showUnlock(errorText) {
+    $('unlock-pw').type = 'password';   // 每次都從遮住開始（🙈）
     $('unlock-hint').hidden = !(state.meta && state.meta.hint);   // 有設定提示就直接顯示
     $('unlock-hint').textContent = state.meta && state.meta.hint ? '💡 登入密碼提示：' + state.meta.hint : '';
     setError('unlock-error', errorText || '');
@@ -321,18 +322,38 @@
       state.filterOwner = state.me;   // 打開時，歸屬者篩選預設選自己（按「👤 全部」看全部）
       $('unlock-pw').value = '';
       state.encrypted = res.entries;
-      loadIndex();
+      await loadIndex();
       renderList();
       resetLockTimer();
     });
   }
 
-  /** 清單（名稱、分類、小分類、歸屬者、網址、備註都是明文） */
-  function loadIndex() {
-    state.items = (state.encrypted || []).map(function (e) {
-      return { id: e.id, rev: e.rev, updatedAt: e.updatedAt, updatedBy: e.updatedBy, s: fromServer(e.summary || {}) };
-    });
+  /** 清單：名稱、分類…是明文；帳號密碼在這裡解開（只在記憶體裡，鎖定就清掉），卡片才能顯示帳號和密碼頭尾 */
+  async function loadIndex() {
+    const out = [];
+    let broken = 0;
+    for (const e of state.encrypted || []) {
+      const item = { id: e.id, rev: e.rev, updatedAt: e.updatedAt, updatedBy: e.updatedBy, s: fromServer(e.summary || {}), x: null };
+      if (e.secret && e.secret.data) {
+        try { item.x = await VC.decryptSecret(state.vk, e.id, e.secret.iv, e.secret.data); } catch (err) { broken++; }
+      }
+      out.push(item);
+    }
+    state.items = out;
     state.encrypted = null;
+    if (broken) toast('有 ' + broken + ' 筆的帳號密碼解不開（可能已損毀）');
+  }
+
+  /**
+   * 卡片上的密碼：只露頭尾幫助辨識，中間固定 4 個點（不透露長度）
+   * 8 碼以上露前 2 後 2；6～7 碼露前 1 後 1；5 碼以下全部遮住（露頭尾就等於露出大半）
+   */
+  function maskPassword(pw) {
+    pw = String(pw || '');
+    if (!pw) return '';
+    if (pw.length >= 8) return pw.slice(0, 2) + '••••' + pw.slice(-2);
+    if (pw.length >= 6) return pw.slice(0, 1) + '••••' + pw.slice(-1);
+    return '••••';
   }
 
   /** 試算表的明文摘要 → 網頁用的格式（分類文字 → key） */
@@ -349,7 +370,7 @@
   async function reloadIndex() {
     const res = await api('getIndex');
     state.encrypted = res.entries;
-    loadIndex();
+    await loadIndex();
     renderList();
   }
 
@@ -469,7 +490,8 @@
     }
     if (state.filterOwner && item.s.owner !== state.filterOwner) return false;
     if (!q) return true;
-    const hay = [item.s.name, item.s.owner, item.s.subcategory, item.s.url, item.s.note, catLabel(item.s.category)].join(' ').toLowerCase();
+    // 帳號也搜得到（已經在手機上解開）；密碼不能搜
+    const hay = [item.s.name, item.s.owner, item.s.subcategory, item.s.url, item.s.note, item.x ? item.x.username : '', catLabel(item.s.category)].join(' ').toLowerCase();
     return q.toLowerCase().split(/\s+/).filter(Boolean).every(function (w) { return hay.indexOf(w) >= 0; });
   }
 
@@ -508,48 +530,24 @@
     }
     appendHighlighted(nameWrap, it.s.name, q);
     left.appendChild(nameWrap);
-    const extra = [it.s.url ? it.s.url.replace(/^https?:\/\//, '') : '', it.s.note].filter(Boolean).join('・');
-    if (extra) {
-      const subWrap = el('div', 'item-sub');
-      appendHighlighted(subWrap, extra, q);
-      left.appendChild(subWrap);
+    if (it.x && (it.x.username || it.x.password)) {
+      if (it.x.username) {
+        const u = el('div', 'item-cred');
+        u.appendChild(el('span', 'item-cred-label', '帳號'));
+        const v = el('span', 'item-cred-value');
+        appendHighlighted(v, it.x.username, q);
+        u.appendChild(v);
+        left.appendChild(u);
+      }
+      if (it.x.password) {
+        const pw = el('div', 'item-cred');
+        pw.appendChild(el('span', 'item-cred-label', '密碼'));
+        pw.appendChild(el('span', 'item-cred-value mono', maskPassword(it.x.password)));
+        left.appendChild(pw);
+      }
     }
     b.appendChild(left);
     if (it.s.owner) b.appendChild(el('span', 'item-owner', '擁有人：' + it.s.owner));
-
-    // 右側快捷動作：快速複製密碼
-    const quickBtn = el('button', 'item-quick-btn');
-    quickBtn.type = 'button';
-    quickBtn.title = '快速複製密碼';
-    quickBtn.setAttribute('aria-label', '複製密碼');
-    quickBtn.innerHTML = '📋 密碼';
-    quickBtn.addEventListener('click', async function (ev) {
-      ev.stopPropagation(); // 阻止觸發開詳細卡片
-      quickBtn.disabled = true;
-      quickBtn.textContent = '解密…';
-      try {
-        const res = await api('getSecret', { id: it.id });
-        it.rev = res.rev;
-        const secret = await VC.decryptSecret(state.vk, it.id, res.secret.iv, res.secret.data);
-        if (secret.password) {
-          copyText(secret.password);
-          quickBtn.textContent = '✅ 已複製';
-        } else {
-          toast('此項目未設定密碼');
-          quickBtn.textContent = '無密碼';
-        }
-      } catch (err) {
-        if (!err.handled) toast('複製失敗：' + (err.message || ''));
-        quickBtn.textContent = '失敗';
-      } finally {
-        setTimeout(function () {
-          quickBtn.disabled = false;
-          quickBtn.innerHTML = '📋 密碼';
-        }, 1500);
-      }
-    });
-    b.appendChild(quickBtn);
-
     b.appendChild(el('span', 'item-arrow', '›'));
     b.addEventListener('click', function () { openDetail(it); });
     return b;
@@ -803,7 +801,7 @@
           summary: toServer(summary),   // 名稱、分類…不加密，直接存在試算表
           secret: await VC.encryptSecret(state.vk, id, secret)
         });
-        const saved = { id: id, rev: res.rev, updatedAt: res.updatedAt, updatedBy: res.updatedBy, s: summary };
+        const saved = { id: id, rev: res.rev, updatedAt: res.updatedAt, updatedBy: res.updatedBy, s: summary, x: secret };
         state.items = state.items.filter(function (x) { return x.id !== id; }).concat([saved]);
         closeSheet('sheet-edit');
         renderList();
@@ -857,7 +855,32 @@
   // 事件
   // ============================================================
 
+  /**
+   * 顯示密碼的按鈕：遮住時 🙈、顯示時 🐵
+   * 用 MutationObserver 跟著密碼的狀態自動換圖示（倒數結束自動遮回、關掉畫面、鎖定…都會跟著變）
+   */
+  function bindRevealIcons() {
+    const pairs = [
+      { btn: 'd-reveal', target: 'd-pass', shown: function (e) { return e.textContent !== '••••••••' && e.textContent !== ''; }, opts: { childList: true, characterData: true, subtree: true } },
+      { btn: 'e-pass-toggle', target: 'e-pass', shown: function (e) { return e.type === 'text'; }, opts: { attributes: true, attributeFilter: ['type'] } },
+      { btn: 'unlock-pass-toggle', target: 'unlock-pw', shown: function (e) { return e.type === 'text'; }, opts: { attributes: true, attributeFilter: ['type'] } }
+    ];
+    pairs.forEach(function (p) {
+      const btn = $(p.btn), target = $(p.target);
+      if (!btn || !target) return;
+      const sync = function () {
+        const on = p.shown(target);
+        btn.textContent = on ? '🐵' : '🙈';
+        btn.setAttribute('aria-label', on ? '隱藏密碼' : '顯示密碼');
+        btn.classList.toggle('on', on);
+      };
+      new MutationObserver(sync).observe(target, p.opts);
+      sync();
+    });
+  }
+
   function bind() {
+    bindRevealIcons();
     $('unlock-form').addEventListener('submit', onUnlock);
     const unlockToggle = $('unlock-pass-toggle');
     if (unlockToggle) {
