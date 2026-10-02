@@ -1,13 +1,13 @@
 // ============================================================
-// White 密碼本：LIFF 網頁
+// White 密碼庫：LIFF 網頁
 // ------------------------------------------------------------
-// 這個網頁只做：輸入主密碼打開、查詢、新增／修改／刪除帳密
-//   主密碼的設定（建立、更換、救援碼）不在網頁上，是在電腦用主密碼工具產生後貼到 GAS 指令碼屬性
-// 流程：LINE 身分（ID Token）→ 輸入主密碼 → 手機推導出「登入鑰」給後端驗證、「KEK」留在手機
-//      → 後端驗證通過才給「包起來的密碼本金鑰」和清單 → 手機用 KEK 打開金鑰
+// 這個網頁只做：輸入登入密碼打開、查詢、新增／修改／刪除帳密
+//   登入密碼的設定（建立、更換、救援碼）不在網頁上，是在電腦用主密碼工具產生後貼到 GAS 指令碼屬性
+// 流程：LINE 身分（ID Token）→ 輸入登入密碼 → 手機推導出「登入鑰」給後端驗證、「KEK」留在手機
+//      → 後端驗證通過才給「包起來的密碼庫金鑰」和清單 → 手機用 KEK 打開金鑰
 // 安全原則：
 //   ・帳號、密碼加密；名稱、分類、小分類、歸屬者、網址、備註不加密（直接存在試算表，方便在 Excel 查看）
-//   ・主密碼、金鑰、帳號密碼明文只在這個網頁的記憶體裡，不存 localStorage、不寫 console
+//   ・登入密碼、金鑰、帳號密碼明文只在這個網頁的記憶體裡，不存 localStorage、不寫 console
 //   ・帳號密碼點開那一筆才下載、才解密，關掉就清掉
 //   ・畫面一律用 textContent 放資料，不用 innerHTML，資料裡就算有 HTML 也不會被執行
 //   ・5 分鐘沒動作、或切到別的 App 超過 2 分鐘，就清掉金鑰鎖定
@@ -32,10 +32,10 @@
     idToken: null,
     meta: null,        // { initialized, saltM, iterations, hint }
     session: null,     // 後端發的工作階段（15 分鐘）
-    vk: null,          // 密碼本金鑰（CryptoKey，不可匯出）
+    vk: null,          // 密碼庫金鑰（CryptoKey，不可匯出）
     encrypted: null,   // 還沒解開的摘要
     items: [],         // [{ id, rev, updatedAt, updatedBy, s: 摘要明文 }]
-    owners: [],        // 歸屬者下拉選項（GAS 的 VAULT_OWNERS，輸入主密碼後才拿得到）
+    owners: [],        // 歸屬者下拉選項（GAS 的 VAULT_OWNERS，輸入登入密碼後才拿得到）
     me: '',            // 自己對應的歸屬者（新增時預設選這個）
     favs: [],          // 常用項目 id 清單（從後端讀來，不存 localStorage）
     filterOwner: '',
@@ -164,6 +164,7 @@
     return d.getFullYear() + '/' + p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  let clipboardClearTimer = null;
   async function copyText(text) {
     try {
       await navigator.clipboard.writeText(text);
@@ -181,6 +182,16 @@
       ta.value = '';
     }
     toast('已複製');
+
+    // 資安加固：45 秒後自動嘗試清除剪貼簿敏感內容
+    clearTimeout(clipboardClearTimer);
+    clipboardClearTimer = setTimeout(async function () {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText('');
+        }
+      } catch (e) {}
+    }, 45000);
   }
 
   // ============================================================
@@ -206,7 +217,7 @@
         clearSecrets();
         showMessage('🔑', '需要重新登入 LINE', res.error, { relogin: true });
         err.handled = true;
-      } else if (res.code === 'SESSION') { lock('工作階段已過期，請重新輸入主密碼'); err.handled = true; }
+      } else if (res.code === 'SESSION') { lock('工作階段已過期，請重新輸入登入密碼'); err.handled = true; }
       throw err;
     }
     return res;
@@ -262,7 +273,7 @@
     });
   }
 
-  /** 還沒輸入主密碼：只拿得到 salt、提示、有沒有被鎖定 */
+  /** 還沒輸入登入密碼：只拿得到 salt、提示、有沒有被鎖定 */
   async function loadMeta() {
     const res = await api('getMeta');
     if (res.lock) return showLocked(res.lock);
@@ -462,7 +473,31 @@
     return q.toLowerCase().split(/\s+/).filter(Boolean).every(function (w) { return hay.indexOf(w) >= 0; });
   }
 
+  function appendHighlighted(parent, text, query) {
+    if (!query) {
+      parent.appendChild(document.createTextNode(text));
+      return;
+    }
+    const qLower = query.toLowerCase();
+    const tLower = text.toLowerCase();
+    let idx = tLower.indexOf(qLower);
+    if (idx < 0) {
+      parent.appendChild(document.createTextNode(text));
+      return;
+    }
+    let last = 0;
+    while (idx >= 0) {
+      if (idx > last) parent.appendChild(document.createTextNode(text.substring(last, idx)));
+      const mark = el('mark', 'highlight', text.substring(idx, idx + query.length));
+      parent.appendChild(mark);
+      last = idx + query.length;
+      idx = tLower.indexOf(qLower, last);
+    }
+    if (last < text.length) parent.appendChild(document.createTextNode(text.substring(last)));
+  }
+
   function createItemButton(it) {
+    const q = $('search') ? $('search').value.trim() : '';
     const b = el('button', 'item');
     b.type = 'button';
     const left = el('div');
@@ -471,12 +506,50 @@
     if (isFavorite(it.id)) {
       nameWrap.appendChild(el('span', 'item-star', '⭐ '));
     }
-    nameWrap.appendChild(document.createTextNode(it.s.name));
+    appendHighlighted(nameWrap, it.s.name, q);
     left.appendChild(nameWrap);
     const extra = [it.s.url ? it.s.url.replace(/^https?:\/\//, '') : '', it.s.note].filter(Boolean).join('・');
-    if (extra) left.appendChild(el('div', 'item-sub', extra));
+    if (extra) {
+      const subWrap = el('div', 'item-sub');
+      appendHighlighted(subWrap, extra, q);
+      left.appendChild(subWrap);
+    }
     b.appendChild(left);
     if (it.s.owner) b.appendChild(el('span', 'item-owner', '擁有人：' + it.s.owner));
+
+    // 右側快捷動作：快速複製密碼
+    const quickBtn = el('button', 'item-quick-btn');
+    quickBtn.type = 'button';
+    quickBtn.title = '快速複製密碼';
+    quickBtn.setAttribute('aria-label', '複製密碼');
+    quickBtn.innerHTML = '📋 密碼';
+    quickBtn.addEventListener('click', async function (ev) {
+      ev.stopPropagation(); // 阻止觸發開詳細卡片
+      quickBtn.disabled = true;
+      quickBtn.textContent = '解密…';
+      try {
+        const res = await api('getSecret', { id: it.id });
+        it.rev = res.rev;
+        const secret = await VC.decryptSecret(state.vk, it.id, res.secret.iv, res.secret.data);
+        if (secret.password) {
+          copyText(secret.password);
+          quickBtn.textContent = '✅ 已複製';
+        } else {
+          toast('此項目未設定密碼');
+          quickBtn.textContent = '無密碼';
+        }
+      } catch (err) {
+        if (!err.handled) toast('複製失敗：' + (err.message || ''));
+        quickBtn.textContent = '失敗';
+      } finally {
+        setTimeout(function () {
+          quickBtn.disabled = false;
+          quickBtn.innerHTML = '📋 密碼';
+        }, 1500);
+      }
+    });
+    b.appendChild(quickBtn);
+
     b.appendChild(el('span', 'item-arrow', '›'));
     b.addEventListener('click', function () { openDetail(it); });
     return b;
@@ -535,10 +608,12 @@
           });
           g.appendChild(block);
         } else {
-          // 未分類標籤的項目
+          // 未填寫標籤的項目：統一收進簡潔的圓角卡片中（無徽章）
+          const block = el('div', 'sub-block sub-block-plain');
           items.forEach(function (it) {
-            g.appendChild(createItemButton(it));
+            block.appendChild(createItemButton(it));
           });
+          g.appendChild(block);
         }
       });
       list.appendChild(g);
@@ -582,17 +657,35 @@
     state.detail = null;
     $('d-user').textContent = '';
     $('d-pass').textContent = '••••••••';
+    if ($('d-countdown-wrap')) $('d-countdown-wrap').hidden = true;
+    if ($('d-countdown-bar')) $('d-countdown-bar').style.width = '100%';
   }
 
   function toggleReveal() {
     if (!state.detail || !state.detail.secret) return;
     const span = $('d-pass');
+    const wrap = $('d-countdown-wrap');
+    const bar = $('d-countdown-bar');
     clearTimeout(state.revealTimer);
     if (span.textContent === '••••••••') {
       span.textContent = state.detail.secret.password || '（沒有密碼）';
-      state.revealTimer = setTimeout(function () { span.textContent = '••••••••'; }, CFG.REVEAL_MS || 30000);
+      const revealMs = CFG.REVEAL_MS || 30000;
+      if (wrap && bar) {
+        wrap.hidden = false;
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+        // 強制重繪讓 transition 生效
+        bar.offsetHeight;
+        bar.style.transition = 'width ' + (revealMs / 1000) + 's linear';
+        bar.style.width = '0%';
+      }
+      state.revealTimer = setTimeout(function () {
+        span.textContent = '••••••••';
+        if (wrap) wrap.hidden = true;
+      }, revealMs);
     } else {
       span.textContent = '••••••••';
+      if (wrap) wrap.hidden = true;
     }
   }
 
@@ -766,6 +859,13 @@
 
   function bind() {
     $('unlock-form').addEventListener('submit', onUnlock);
+    const unlockToggle = $('unlock-pass-toggle');
+    if (unlockToggle) {
+      unlockToggle.addEventListener('click', function () {
+        const pw = $('unlock-pw');
+        pw.type = pw.type === 'password' ? 'text' : 'password';
+      });
+    }
     $('message-retry').addEventListener('click', function () { location.reload(); });
     $('message-relogin').addEventListener('click', relogin);
 
@@ -822,7 +922,7 @@
     ['pointerdown', 'keydown', 'input', 'scroll'].forEach(function (evName) {
       document.addEventListener(evName, resetLockTimer, { passive: true, capture: true });
     });
-    // 切到別的 App（例如去貼上剛複製的密碼）：2 分鐘內回來不用重新輸入主密碼，超過才鎖定
+    // 切到別的 App（例如去貼上剛複製的密碼）：2 分鐘內回來不用重新輸入登入密碼，超過才鎖定
     let hiddenAt = 0;
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }

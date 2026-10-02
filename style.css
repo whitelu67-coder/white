@@ -163,33 +163,39 @@ a { color: var(--blue); word-break: break-all; }
 .group-title { font-weight: 700; font-size: 15px; margin: 10px 4px 6px; }
 .sub-title { font-size: 13px; color: var(--muted); margin: 8px 4px 4px; }
 
-/* 相同標籤區塊（參考林森苑卡片區塊設計，標籤壓在左上角邊框） */
+/* 相同標籤區塊（Inset Grouped 現代卡片設計） */
 .sub-block {
   position: relative;
   border: 1.5px solid var(--line);
-  background: rgba(248, 249, 250, 0.7);
-  border-radius: 12px;
-  padding: 16px 10px 8px;
-  margin: 16px 0 10px;
+  background: var(--card);
+  border-radius: 14px;
+  padding: 12px 0 0;
+  margin: 18px 0 14px;
+  overflow: visible;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
-/* 單數區塊：綠框 + 淡綠底色 */
+/* 無子標籤時的卡片（不留左上角徽章的上方空間） */
+.sub-block.sub-block-plain {
+  padding-top: 0;
+  margin: 10px 0 14px;
+}
+/* 單數區塊：淡綠邊框微調 */
 .sub-block.sub-block-alt {
   border-color: #86EFAC;
-  background: #F0FDF4;
 }
 .sub-block-tag {
   position: absolute;
   top: -11px;
   left: 12px;
   background: var(--card);
-  border: 1px solid var(--blue);
+  border: 1.5px solid var(--blue);
   border-radius: 6px;
-  padding: 1px 8px;
+  padding: 1px 9px;
   font-size: 12px;
   font-weight: 700;
   color: var(--blue);
   line-height: 1.4;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
   z-index: 2;
   white-space: nowrap;
 }
@@ -197,21 +203,46 @@ a { color: var(--blue); word-break: break-all; }
   border-color: var(--green);
   color: var(--green);
 }
-.sub-block .item {
-  margin: 6px 0;
-  background: var(--card);
-}
+
+/* 列表項目按鈕（整合於同一卡片中，內建分割線） */
 .item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 12px 14px; margin: 6px 0; text-align: left; font-family: inherit; color: var(--text); cursor: pointer;
+  background: transparent; border: none; border-bottom: 1px solid var(--line);
+  padding: 12px 14px; text-align: left; font-family: inherit; color: var(--text); cursor: pointer;
+  transition: background .15s ease;
 }
+.item:last-child { border-bottom: none; border-radius: 0 0 14px 14px; }
+.item:first-of-type { border-radius: 14px 14px 0 0; }
+.item:only-child { border-radius: 14px; }
+.item:active { background: rgba(0, 0, 0, 0.04); }
+
+/* 未在標籤區塊內的獨立項目（無小分類時） */
+.group > .item {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin: 6px 0;
+}
+
 .item-name { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-main { flex: 1; min-width: 0; }
-.item-owner { flex: none; font-size: 13px; color: var(--blue); white-space: nowrap; }
-.item-sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.item-arrow { color: var(--muted); flex: none; }
+.item-owner { flex: none; font-size: 12px; color: var(--blue); white-space: nowrap; background: rgba(37,99,235,0.08); padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+.item-sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.item-arrow { color: var(--muted); flex: none; font-size: 18px; margin-left: 2px; }
 .item-star { font-size: 14px; margin-right: 2px; }
+
+/* 列表快捷複製密碼按鈕 */
+.item-quick-btn {
+  flex: none; background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.35);
+  color: var(--green); border-radius: 8px; font-size: 13px; font-weight: 700;
+  padding: 5px 9px; cursor: pointer; transition: all .15s ease; line-height: 1.2;
+}
+.item-quick-btn:active { background: var(--green); color: #fff; transform: scale(0.95); }
+.item-quick-btn:disabled { opacity: 0.7; cursor: default; }
+
+/* 搜尋關鍵字高亮 */
+mark.highlight { background: #FEF08A; color: #854D0E; padding: 0 1px; border-radius: 2px; font-weight: 700; }
+
 .group-fav { margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
 .group-fav .group-title { color: #D97706; }
 .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
@@ -250,10 +281,33 @@ a { color: var(--blue); word-break: break-all; }
 .fav-btn.on { color: #EAB308; }
 .sheet-title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .head-warn { color: var(--red); font-size: 14px; font-weight: 600; }
-.kv { border-top: 1px solid var(--line); padding: 10px 0; }
+
+.kv { border-top: 1px solid var(--line); padding: 12px 0; }
 .kv-label { font-size: 13px; color: var(--muted); }
-.kv-value { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.kv-value { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .kv-value > span, .kv-value > a { flex: 1; min-width: 0; }
+
+/* 詳細頁動作按鈕 */
+.btn-action-copy {
+  flex: none; padding: 7px 12px; font-size: 13px; font-weight: 700; font-family: inherit;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  cursor: pointer; transition: all .15s ease;
+}
+.btn-action-copy:active { transform: scale(0.95); }
+.btn-action-copy.primary {
+  background: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.4); color: var(--green);
+}
+.btn-action-copy.primary:active { background: var(--green); color: #fff; }
+
+/* 密碼倒數進度條 */
+.countdown-bar-wrap {
+  width: 100%; height: 4px; background: rgba(0, 0, 0, 0.06); border-radius: 2px;
+  overflow: hidden; margin-top: 6px;
+}
+.countdown-bar {
+  height: 100%; width: 100%; background: linear-gradient(90deg, #10B981, #F59E0B, #EF4444);
+  border-radius: 2px;
+}
 .log { list-style: none; padding: 0; margin: 8px 0; font-size: 13px; }
 .log li { border-bottom: 1px solid var(--line); padding: 6px 0; }
 .log li.warn-line { color: var(--red); }

@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
   <title>密碼庫</title>
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
   <main id="app">
@@ -32,7 +32,11 @@
       <div class="card">
         <h1>🔐 密碼庫</h1>
         <form id="unlock-form" autocomplete="off">
-          <div class="float"><input id="unlock-pw" type="password" autocomplete="current-password" placeholder=" "><label for="unlock-pw">登入密碼</label></div>
+          <div class="float has-btn">
+            <input id="unlock-pw" type="password" autocomplete="current-password" placeholder=" ">
+            <label for="unlock-pw">登入密碼</label>
+            <button id="unlock-pass-toggle" class="mini" type="button" aria-label="顯示密碼">👁️</button>
+          </div>
           <p id="unlock-hint" class="hint-box" hidden></p>
           <p id="unlock-error" class="error" hidden></p>
           <button id="unlock-submit" class="btn btn-primary" type="submit">解鎖</button>
@@ -77,14 +81,21 @@
       <p id="d-cat" class="muted"></p>
       <div class="kv">
         <div class="kv-label">帳號</div>
-        <div class="kv-value"><span id="d-user" class="mono">解密中…</span>
-          <button id="d-copy-user" class="mini" type="button">📋</button></div>
+        <div class="kv-value">
+          <span id="d-user" class="mono">解密中…</span>
+          <button id="d-copy-user" class="btn-action-copy" type="button">📋 複製</button>
+        </div>
       </div>
       <div class="kv">
         <div class="kv-label">密碼</div>
-        <div class="kv-value"><span id="d-pass" class="mono">••••••••</span>
-          <button id="d-reveal" class="mini" type="button">👁️</button>
-          <button id="d-copy-pass" class="mini" type="button">📋</button></div>
+        <div class="kv-value">
+          <span id="d-pass" class="mono">••••••••</span>
+          <button id="d-reveal" class="mini" type="button" aria-label="顯示密碼">👁️</button>
+          <button id="d-copy-pass" class="btn-action-copy primary" type="button">📋 複製密碼</button>
+        </div>
+        <div id="d-countdown-wrap" class="countdown-bar-wrap" hidden>
+          <div id="d-countdown-bar" class="countdown-bar"></div>
+        </div>
       </div>
       <div class="kv" id="d-url-row">
         <div class="kv-label">網址</div>
@@ -159,6 +170,6 @@
   <script src="config.js?v=13"></script>
   <script src="vault-crypto.js?v=13"></script>
   <script src="vendor/liff-sdk-2.31.0.js" integrity="sha384-T6WhT96rkehAFkTtmiRZ60sehxj4zgbifvzi7oGH792T3NN++f2rCvyb/WrHAz2D"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
