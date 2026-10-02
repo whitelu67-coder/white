@@ -1,30 +1,24 @@
 // ============================================================
-// White 密碼本：加解密核心（只用瀏覽器內建的 Web Crypto，不引用任何加密套件）
+// White 密碼庫：加解密核心（只用瀏覽器內建的 Web Crypto，不引用任何加密套件）
 // ------------------------------------------------------------
-// 金鑰架構（v2）：
-//   密碼本金鑰 VK：建立時隨機產生的 AES-256 金鑰，所有資料都用它加密
+// 金鑰架構：
+//   密碼庫金鑰 VK：建立時隨機產生的 AES-256 金鑰，帳號密碼都用它加密
 //   主密碼 --PBKDF2-SHA256（600,000 次）＋ saltM--> 256 bits --HKDF-->
-//       ・KEK_m：把 VK 加密包起來（wrapM）       → 只在手機上用
-//       ・登入鑰 authM：送給 GAS 驗證（GAS 只存雜湊）→ 推不回主密碼，也推不出 KEK_m
-//   救援碼（隨機 30 碼）--PBKDF2（100,000 次）＋ saltR--> 一樣分出 KEK_r、authR，另外包一份 VK（wrapR）
-//   → 用主密碼或救援碼都能打開；換主密碼只要重新包 VK，不用重新加密所有資料
+//       ・KEK：把 VK 加密包起來（wrapM）            → 只在手機上用
+//       ・登入鑰 auth：送給 GAS 驗證（GAS 只存雜湊）→ 推不回主密碼，也推不出 KEK
+//   → 換主密碼只要重新包 VK，不用重新加密所有資料
 //
-// 每一筆資料分成兩段分別用 VK 加密：
-//   摘要 summary：名稱、分類、小分類、網址、備註（解鎖時全部解開，用來顯示清單、搜尋）
-//   機密 secret ：帳號、密碼（點開那一筆才向後端要、才解密）
-// 每次加密都用新的隨機 IV；並把「這筆的 id + 哪一段」當作附加驗證資料（AAD），
-// 避免有人把 A 筆的密文搬到 B 筆、或把摘要跟機密對調還能解得開。
+// 每一筆的帳號、密碼（secret）用 VK 加密；名稱、分類…不加密（直接存在試算表）
+// 每次加密都用新的隨機 IV；並把「這筆的 id」當作附加驗證資料（AAD），
+// 避免有人把 A 筆的密文搬到 B 筆還能解得開。
 // 瀏覽器、Node.js（測試用）都能載入。
 // ============================================================
 (function (root) {
   'use strict';
 
   const PBKDF2_ITERATIONS = 600000;            // 主密碼：OWASP 2023 建議 PBKDF2-SHA256 至少 600,000 次
-  const RECOVERY_ITERATIONS = 100000;          // 救援碼本身是 150 bits 的隨機碼，不需要那麼多次
   const SALT_BYTES = 16;
   const IV_BYTES = 12;                         // AES-GCM 建議的 IV 長度
-  const RECOVERY_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // 31 個字，不含容易看錯的 0 O 1 I L
-  const RECOVERY_LENGTH = 30;                  // 30 × log2(31) ≈ 148 bits
 
   const subtle = (root.crypto && root.crypto.subtle) || null;
   const enc = new TextEncoder();
@@ -38,14 +32,6 @@
     const b = new Uint8Array(n);
     root.crypto.getRandomValues(b);
     return b;
-  }
-
-  /** 從字元集裡隨機挑一個（拒絕取樣，避免偏差） */
-  function randomChar(chars) {
-    const limit = 256 - (256 % chars.length);
-    let x;
-    do { x = randomBytes(1)[0]; } while (x >= limit);
-    return chars[x % chars.length];
   }
 
   function toB64(bytes) {
@@ -73,7 +59,7 @@
   }
 
   // ============================================================
-  // 主密碼、救援碼 → KEK（包 VK 用）＋ 登入鑰（給 GAS 驗證）
+  // 主密碼 → KEK（包 VK 用）＋ 登入鑰（給 GAS 驗證）
   // ============================================================
 
   async function splitKeys(bits, label) {
@@ -86,46 +72,20 @@
     return { kek: kek, auth: toB64(auth) };
   }
 
-  async function pbkdf2Bits(secret, saltB64, iterations) {
-    const base = await subtle.importKey('raw', enc.encode(secret), 'PBKDF2', false, ['deriveBits']);
-    return subtle.deriveBits({ name: 'PBKDF2', salt: fromB64(saltB64), iterations: iterations, hash: 'SHA-256' }, base, 256);
-  }
-
   /** 主密碼 → { kek, auth } */
   async function deriveMasterKeys(masterPassword, saltB64, iterations) {
-    const bits = await pbkdf2Bits(String(masterPassword).normalize('NFC'), saltB64, iterations || PBKDF2_ITERATIONS);
+    const base = await subtle.importKey('raw', enc.encode(String(masterPassword).normalize('NFC')), 'PBKDF2', false, ['deriveBits']);
+    const bits = await subtle.deriveBits({ name: 'PBKDF2', salt: fromB64(saltB64), iterations: iterations || PBKDF2_ITERATIONS, hash: 'SHA-256' }, base, 256);
     return splitKeys(bits, 'master');
   }
 
   /** 登入鑰的雜湊：存在 GAS 的 VAULT_META，後端用一樣的算法比對（SHA-256(登入鑰字串) → base64） */
   async function authHash(authB64) {
-    return toB64(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(authB64))));
-  }
-
-  /** 救援碼 → { kek, auth }（大小寫、空白、連字號都不影響） */
-  async function deriveRecoveryKeys(code, saltB64) {
-    const bits = await pbkdf2Bits(normalizeRecoveryCode(code), saltB64, RECOVERY_ITERATIONS);
-    return splitKeys(bits, 'recovery');
-  }
-
-  /** 救援碼：30 個字，分成 6 組，例如 K7QM4-XWP9H-… */
-  function newRecoveryCode() {
-    let s = '';
-    for (let i = 0; i < RECOVERY_LENGTH; i++) s += randomChar(RECOVERY_ALPHABET);
-    return s.match(/.{5}/g).join('-');
-  }
-
-  function normalizeRecoveryCode(code) {
-    return String(code || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
-  }
-
-  function isValidRecoveryCode(code) {
-    const c = normalizeRecoveryCode(code);
-    return c.length === RECOVERY_LENGTH && c.split('').every(function (ch) { return RECOVERY_ALPHABET.indexOf(ch) >= 0; });
+    return toB64(new Uint8Array(await subtle.digest('SHA-256', enc.encode(authB64))));
   }
 
   // ============================================================
-  // 密碼本金鑰 VK：產生、包起來、打開
+  // 密碼庫金鑰 VK：產生、包起來、打開
   // ============================================================
 
   /** 新的 VK（原始 32 bytes）：只在建立時、重新包裝時短暫存在，用完呼叫 wipe() 清掉 */
@@ -156,57 +116,29 @@
   }
 
   // ============================================================
-  // 資料加解密（用 VK）
+  // 帳號密碼加解密（用 VK）
   // ============================================================
 
-  async function encryptJson(key, obj, aad) {
+  function aadFor(id) {
+    return 'white-vault|' + id + '|secret';
+  }
+
+  /** { username, password } → { iv, data } */
+  async function encryptSecret(key, id, secret) {
     const iv = randomBytes(IV_BYTES);
-    const data = await subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode(aad) }, key, enc.encode(JSON.stringify(obj)));
+    const data = await subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode(aadFor(id)) }, key, enc.encode(JSON.stringify(secret)));
     return { iv: toB64(iv), data: toB64(data) };
   }
 
-  /** 金鑰錯誤、資料被竄改、AAD 不符都會丟出錯誤 */
-  async function decryptJson(key, iv, data, aad) {
-    const plain = await subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv), additionalData: enc.encode(aad) }, key, fromB64(data));
+  /** 金鑰錯誤、資料被竄改、id 不符都會丟出錯誤 */
+  async function decryptSecret(key, id, iv, data) {
+    const plain = await subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv), additionalData: enc.encode(aadFor(id)) }, key, fromB64(data));
     return JSON.parse(dec.decode(plain));
   }
 
-  function aadFor(id, part) {
-    return 'white-vault|' + id + '|' + part;
-  }
-
-  function encryptSummary(key, id, summary) { return encryptJson(key, summary, aadFor(id, 'summary')); }
-  function decryptSummary(key, id, iv, data) { return decryptJson(key, iv, data, aadFor(id, 'summary')); }
-  function encryptSecret(key, id, secret) { return encryptJson(key, secret, aadFor(id, 'secret')); }
-  function decryptSecret(key, id, iv, data) { return decryptJson(key, iv, data, aadFor(id, 'secret')); }
-
   // ============================================================
-  // 其他
+  // 主密碼工具用的檢查
   // ============================================================
-
-  /** 產生強密碼：每一種有勾選的字元類型至少出現一次 */
-  function generatePassword(length, opts) {
-    opts = opts || {};
-    const sets = [
-      'ABCDEFGHJKLMNPQRSTUVWXYZ',   // 不含容易看錯的 I、O
-      'abcdefghijkmnopqrstuvwxyz',  // 不含 l
-      '23456789'                     // 不含 0、1
-    ];
-    if (opts.symbols !== false) sets.push('!@#$%^&*-_=+?');
-    const all = sets.join('');
-    length = Math.max(8, Math.min(64, length || 16));
-    const out = sets.map(randomChar);
-    while (out.length < length) out.push(randomChar(all));
-    // Fisher–Yates 洗牌，讓必出現的字元位置也是隨機的
-    for (let i = out.length - 1; i > 0; i--) {
-      const limit = 256 - (256 % (i + 1));
-      let x;
-      do { x = randomBytes(1)[0]; } while (x >= limit);
-      const j = x % (i + 1);
-      const t = out[i]; out[i] = out[j]; out[j] = t;
-    }
-    return out.join('');
-  }
 
   /** 主密碼強度（0～4），只是提示用 */
   function passwordStrength(pw) {
@@ -249,21 +181,14 @@
     newSalt: newSalt,
     newId: newId,
     deriveMasterKeys: deriveMasterKeys,
-    deriveRecoveryKeys: deriveRecoveryKeys,
     authHash: authHash,
-    newRecoveryCode: newRecoveryCode,
-    normalizeRecoveryCode: normalizeRecoveryCode,
-    isValidRecoveryCode: isValidRecoveryCode,
     newVaultKeyRaw: newVaultKeyRaw,
     wipe: wipe,
     wrapVaultKey: wrapVaultKey,
     unwrapVaultKeyRaw: unwrapVaultKeyRaw,
     importVaultKey: importVaultKey,
-    encryptSummary: encryptSummary,
-    decryptSummary: decryptSummary,
     encryptSecret: encryptSecret,
     decryptSecret: decryptSecret,
-    generatePassword: generatePassword,
     passwordStrength: passwordStrength,
     hintRevealsPassword: hintRevealsPassword
   };

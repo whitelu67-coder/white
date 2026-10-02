@@ -354,6 +354,9 @@
     state.filterOwner = '';
     state.encrypted = null;
     ['sheet-detail', 'sheet-edit'].forEach(closeSheet);
+    // 鎖定時還開著的對話框（例如「確定要刪除嗎？」）當作按取消關掉，避免鎖定後還能按確定
+    if (!$('dlg-overlay').hidden) ($('dlg-cancel').hidden ? $('dlg-ok') : $('dlg-cancel')).click();
+    hideMask();
     ['search', 'unlock-pw'].forEach(function (id) { $(id).value = ''; });
     if ($('search-clear')) $('search-clear').hidden = true;
     if ($('filter-owner')) $('filter-owner').value = '';
@@ -419,8 +422,6 @@
       b.addEventListener('click', function () { state.filterCat = c.key; renderList(); });
       box.appendChild(b);
     });
-    const ob = $('owner-chips');
-    if (ob) ob.hidden = true;
   }
 
   function renderOwnerSelect() {
