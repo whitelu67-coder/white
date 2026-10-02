@@ -40,6 +40,7 @@
     favs: [],          // 常用項目 id 清單（從後端讀來，不存 localStorage）
     filterOwner: '',
     lastQuery: '',
+    resume: null,      // 自動鎖定前在看的頁籤、搜尋、擁有人
     sortingFavs: false, // 常用頁的「排序」模式     // 上一次畫清單時的搜尋文字（變了就重新選頁籤）
     filterCat: '',
     detail: null,
@@ -306,7 +307,10 @@
     if (!pw) return;
     setError('unlock-error', '');
     await withBusy('unlock-submit', '解鎖中…', async function () {
+      // 分段顯示進度：手機算登入鑰要幾秒、GAS 回應也要幾秒，讓人知道還在跑
+      $('load-mask-text').textContent = '① 確認登入密碼…';
       const m = await VC.deriveMasterKeys(pw, state.meta.saltM, state.meta.iterations);
+      $('load-mask-text').textContent = '② 讀取資料中…';
       let res;
       try {
         res = await api('unlock', { auth: m.auth });
@@ -314,6 +318,7 @@
         if (!e.handled) { setError('unlock-error', e.message); $('unlock-pw').select(); }
         return;
       }
+      $('load-mask-text').textContent = '③ 解開帳號密碼…';
       const raw = await VC.unwrapVaultKeyRaw(m.kek, res.wrapM);
       state.vk = await VC.importVaultKey(raw);
       VC.wipe(raw);
@@ -321,8 +326,19 @@
       state.owners = res.owners || [];
       state.me = res.me || '';
       state.favs = res.favs || [];
-      state.filterOwner = state.me;   // 打開時，擁有人篩選預設選自己（選「👤 所有人」看全部）
-      state.filterCat = '';            // 由 renderList 選頁籤：排第一個的（常用有資料就是常用）
+      const r = state.resume;
+      state.resume = null;
+      if (r && (!r.owner || state.owners.indexOf(r.owner) >= 0)) {
+        // 剛剛被自動鎖定 → 回到上次看的頁籤、搜尋、擁有人
+        state.filterOwner = r.owner;
+        state.filterCat = r.cat;
+        $('search').value = r.q;
+        $('search-clear').hidden = !r.q;
+        state.lastQuery = r.q;   // 搜尋文字沒變，renderList 不會重新選頁籤
+      } else {
+        state.filterOwner = state.me;   // 打開時，擁有人篩選預設選自己（選「👤 所有人」看全部）
+        state.filterCat = '';            // 由 renderList 選頁籤：排第一個的（常用有資料就是常用）
+      }
       $('unlock-pw').value = '';
       state.encrypted = res.entries;
       await loadIndex();
@@ -379,6 +395,8 @@
 
   /** 清掉所有機密（金鑰、工作階段、解開的資料、畫面上的欄位） */
   function clearSecrets() {
+    // 記住正在看的頁籤、搜尋、擁有人，重新解鎖後回到這裡（只放在記憶體，關掉頁面就沒了）
+    if (state.vk) state.resume = { cat: state.filterCat, q: $('search').value.trim(), owner: state.filterOwner };
     // 排序還沒送出就要鎖定 → 先存（要在登出、清掉工作階段之前）
     if (favSaveTimer && state.session) { clearTimeout(favSaveTimer); favSaveTimer = null; api('saveFavs', { favs: state.favs.slice() }).catch(function () {}); }
     if (state.session) api('logout').catch(function () {});
@@ -828,15 +846,19 @@
     });
   }
 
-  function openEdit(item, secret) {
+  /**
+   * item：修改那一筆；template：複製成新項目（帶入名稱、分類、標籤、網址，帳號密碼、擁有人、備註要重新填）
+   */
+  function openEdit(item, secret, template) {
     state.editing = item ? { item: item } : null;
-    $('e-title').textContent = item ? '✏️ 修改項目' : '＋ 新增項目';
+    const src = item || template;
+    $('e-title').textContent = item ? '✏️ 修改項目' : template ? '📄 複製項目' : '＋ 新增項目';
     $('e-name-warn').hidden = true;
-    $('e-name').value = item ? item.s.name : '';
+    $('e-name').value = src ? src.s.name : '';
     fillOwnerSelect(item ? item.s.owner : (state.filterOwner || state.me));
-    $('e-cat').value = item ? (item.s.category || 'other') : (state.filterCat && state.filterCat !== 'fav' ? state.filterCat : 'finance');
-    $('e-sub').value = item ? (item.s.subcategory || '') : '';
-    $('e-url').value = item ? (item.s.url || '') : '';
+    $('e-cat').value = src ? (src.s.category || 'other') : (state.filterCat && state.filterCat !== 'fav' ? state.filterCat : 'finance');
+    $('e-sub').value = src ? (src.s.subcategory || '') : '';
+    $('e-url').value = src ? (src.s.url || '') : '';
     $('e-note').value = item ? (item.s.note || '') : '';
     $('e-user').value = secret ? (secret.username || '') : '';
     $('e-pass').value = secret ? (secret.password || '') : '';
@@ -846,7 +868,8 @@
     closeSheet('sheet-detail');
     state.editing = item ? { item: item } : null;
     openSheet('sheet-edit');
-    $('e-name').focus();
+    // 複製成新項目：游標直接放在帳號（名稱已經帶好了）
+    (template ? $('e-user') : $('e-name')).focus();
   }
 
   function clearEdit() {
@@ -1005,6 +1028,7 @@
     $('d-copy-pass').addEventListener('click', function () { if (state.detail && state.detail.secret) copyText(state.detail.secret.password || ''); });
     $('d-edit').addEventListener('click', function () { const d = state.detail; if (d && d.secret) openEdit(d.item, d.secret); });
     $('d-delete').addEventListener('click', onDelete);
+    $('d-dup').addEventListener('click', function () { const d = state.detail; if (d) openEdit(null, null, d.item); });
     $('d-url').addEventListener('click', function (ev) {
       ev.preventDefault();
       const url = $('d-url').href;
