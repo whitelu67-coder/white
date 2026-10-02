@@ -288,7 +288,15 @@ a { color: var(--blue); word-break: break-all; }
   .item-arrow { animation: none; opacity: .8; }
 }
 
-.item-star { font-size: 14px; margin-right: 2px; }
+.item-title { display: flex; align-items: center; gap: 4px; min-width: 0; }
+/* 名稱前的星星：可以直接點（☆ 加入常用、⭐ 移除）；點的範圍比星星本身大一點 */
+.item-star {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; margin: -6px 0 -6px -8px; border-radius: 8px;
+  font-size: 19px; line-height: 1; color: #F59E0B; cursor: pointer;
+}
+.item-star:active { background: rgba(245, 158, 11, .15); }
+.item-star.on { font-size: 17px; }
 
 /* 卡片的帳號、密碼（副標題） */
 .item-cred { display: flex; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 2px; min-width: 0; }
@@ -344,15 +352,12 @@ mark.highlight { background: #FEF08A; color: #854D0E; padding: 0 1px; border-rad
 
 /* 詳細頁動作按鈕 */
 .btn-action-copy {
+  /* 明細頁的「複製」：帳號、密碼統一綠框＋淡綠底＋黑字（深色模式是白字） */
   flex: none; padding: 7px 12px; font-size: 13px; font-weight: 700; font-family: inherit;
-  border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  border-radius: 8px; border: 1.5px solid var(--green); background: rgba(22, 163, 74, 0.12); color: var(--text);
   cursor: pointer; transition: all .15s ease;
 }
-.btn-action-copy:active { transform: scale(0.95); }
-.btn-action-copy.primary {
-  background: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.4); color: var(--green);
-}
-.btn-action-copy.primary:active { background: var(--green); color: #fff; }
+.btn-action-copy:active { transform: scale(0.95); background: rgba(22, 163, 74, 0.25); }
 
 /* 密碼倒數進度條 */
 .countdown-bar-wrap {

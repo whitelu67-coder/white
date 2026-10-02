@@ -556,12 +556,29 @@
     if (!sort) b.type = 'button';
     const left = el('div');
     left.className = 'item-main';
-    const nameWrap = el('div', 'item-name');
-    if (isFavorite(it.id)) {
-      nameWrap.appendChild(el('span', 'item-star', '⭐ '));
+    // 名稱前的星星：點一下切換常用（不會打開明細）；卡片本身是按鈕，所以星星用 span＋role=button
+    const titleRow = el('div', 'item-title');
+    const fav = isFavorite(it.id);
+    const star = el('span', 'item-star' + (fav ? ' on' : ''), fav ? '⭐' : '☆');
+    star.setAttribute('role', 'button');
+    star.setAttribute('aria-label', fav ? '從常用移除' : '加入常用');
+    if (!sort) {
+      star.tabIndex = 0;
+      const onStar = function (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        const added = toggleFavorite(it.id);
+        renderList();
+        toast(added ? '⭐ 已加入常用' : '已從常用移除');
+      };
+      star.addEventListener('click', onStar);
+      star.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') onStar(ev); });
     }
+    titleRow.appendChild(star);
+    const nameWrap = el('div', 'item-name');
     appendHighlighted(nameWrap, it.s.name, q);
-    left.appendChild(nameWrap);
+    titleRow.appendChild(nameWrap);
+    left.appendChild(titleRow);
     if (it.x && (it.x.username || it.x.password)) {
       if (it.x.username) {
         const u = el('div', 'item-cred');
