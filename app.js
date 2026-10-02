@@ -510,7 +510,7 @@
     optAll.value = '';
     sel.appendChild(optAll);
     names.forEach(function (n) {
-      const label = n === state.me ? '👤 ' + n + ' (我)' : '👤 ' + n;
+      const label = '👤 ' + n;
       const o = el('option', null, label);
       o.value = n;
       sel.appendChild(o);
@@ -579,7 +579,8 @@
       }
     }
     b.appendChild(left);
-    if (it.s.owner) b.appendChild(el('span', 'item-owner', '擁有人：' + it.s.owner));
+    // 已經篩選某個人時不用再顯示（每張都一樣）；選「所有人」才顯示
+    if (it.s.owner && !state.filterOwner) b.appendChild(el('span', 'item-owner', '擁有人：' + it.s.owner));
     if (sort) {
       const ctrls = el('div', 'sort-ctrls');
       [[-1, '⬆️', '往上移', sort.first], [1, '⬇️', '往下移', sort.last]].forEach(function (m) {

@@ -154,7 +154,9 @@ a { color: var(--blue); word-break: break-all; }
   pointer-events: none; font-size: 11px; color: var(--muted);
 }
 .select-wrap select:focus { outline: 2px solid var(--blue); border-color: transparent; }
-.select-wrap.active select { border-color: var(--blue); color: var(--blue); font-weight: 600; }
+.select-wrap.active select { border-color: var(--blue); background: rgba(37, 99, 235, .10); color: var(--blue); font-weight: 700; }   /* 篩選中：淡藍底（不要太搶眼） */
+.select-wrap.active::after { color: var(--blue); }
+.select-wrap select option { background: var(--card); color: var(--text); }   /* 展開的選項維持一般顏色 */
 .chips { display: flex; gap: 10px; overflow-x: auto; padding: 10px 16px 8px; -webkit-overflow-scrolling: touch; }   /* 上面留空間給右上角的數字 */
 .chips { scrollbar-width: none; }   /* 頁籤可以左右滑，但不顯示捲軸 */
 .chips::-webkit-scrollbar { display: none; }
