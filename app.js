@@ -614,12 +614,8 @@
     const shown = state.items.filter(function (it) { return inTab(it, state.filterCat) && matches(it, q); });
     if (state.filterCat !== 'fav' || q) state.sortingFavs = false;   // 離開常用頁、或搜尋中 → 結束排序
     if (!shown.length) {
-      let msg;
-      if (!state.items.length) msg = '還沒有任何資料，按右上角的「＋ 新增項目」開始';
-      else if (q || state.filterOwner) msg = '找不到符合的項目' + (state.filterOwner ? '\n（目前只看「' + state.filterOwner + '」的，可以改成「所有人」）' : '');
-      else if (state.filterCat === 'fav') msg = '目前還沒有加入常用項目\n點開任何項目按左上角「☆」即可加入';
-      else msg = '這個分類還沒有資料';
-      list.appendChild(el('div', 'empty', msg));
+      // 不管是沒有資料、搜尋不到、篩選擁有人、常用是空的，都顯示同一句（規則太多，簡單就好）
+      list.appendChild(el('div', 'empty', '找不到符合項目'));
       return;
     }
     if (state.filterCat === 'fav') { renderFavList(list, shown, q); return; }
