@@ -352,16 +352,34 @@
     const out = [];
     let broken = 0;
     for (const e of state.encrypted || []) {
+      // x：帳號＋密碼頭尾（卡片用）。完整密碼不在這裡，點開明細才跟 GAS 拿
       const item = { id: e.id, rev: e.rev, updatedAt: e.updatedAt, updatedBy: e.updatedBy, s: fromServer(e.summary || {}), x: null };
-      if (e.secret && e.secret.data) {
-        try { item.x = await VC.decryptSecret(state.vk, e.id, e.secret.iv, e.secret.data); } catch (err) { broken++; }
-      }
+      try {
+        if (e.user) {
+          item.x = { username: await VC.decryptPart(state.vk, e.id, 'user', e.user.iv, e.user.data),
+                     mask: await VC.decryptPart(state.vk, e.id, 'mask', e.mask.iv, e.mask.data) };
+        } else if (e.legacy) {
+          // 舊格式（帳號＋密碼一起加密）：照樣顯示；修改後按儲存就會存成新格式
+          const old = await VC.decryptSecret(state.vk, e.id, e.legacy.iv, e.legacy.data);
+          item.x = { username: old.username || '', mask: maskPassword(old.password) };
+        }
+      } catch (err) { broken++; }
       out.push(item);
     }
     state.items = out;
     state.encrypted = null;
     if (broken) toast('有 ' + broken + ' 筆的帳號密碼解不開（可能已損毀）');
   }
+
+  /** 帳號、密碼頭尾、完整密碼分開加密 */
+  async function buildCred(id, secret) {
+    return {
+      user: await VC.encryptPart(state.vk, id, 'user', secret.username || ''),
+      mask: await VC.encryptPart(state.vk, id, 'mask', maskPassword(secret.password)),
+      pass: await VC.encryptPart(state.vk, id, 'pass', secret.password || '')
+    };
+  }
+
 
   /**
    * 卡片上的密碼：只露頭尾幫助辨識，中間固定 4 個點（不透露長度）
@@ -597,7 +615,7 @@
     appendHighlighted(nameWrap, it.s.name, q);
     titleRow.appendChild(nameWrap);
     left.appendChild(titleRow);
-    if (it.x && (it.x.username || it.x.password)) {
+    if (it.x && (it.x.username || it.x.mask)) {
       if (it.x.username) {
         const u = el('div', 'item-cred');
         u.appendChild(el('span', 'item-cred-label', '帳號'));
@@ -606,10 +624,10 @@
         u.appendChild(v);
         left.appendChild(u);
       }
-      if (it.x.password) {
+      if (it.x.mask) {
         const pw = el('div', 'item-cred');
         pw.appendChild(el('span', 'item-cred-label', '密碼'));
-        pw.appendChild(el('span', 'item-cred-value mono', maskPassword(it.x.password)));
+        pw.appendChild(el('span', 'item-cred-value mono', it.x.mask));
         left.appendChild(pw);
       }
     }
@@ -736,8 +754,10 @@
     $('d-cat').textContent = catLabel(item.s.category) + (item.s.subcategory ? ' › ' + item.s.subcategory : '');
     $('d-owner-row').hidden = !item.s.owner;
     $('d-owner').textContent = item.s.owner || '';
-    // 帳號密碼在解鎖時就已經解開了 → 直接顯示，不用再跟 GAS 拿
-    state.detail.secret = item.x || null;
+    // 帳號在解鎖時已經解開 → 直接顯示；完整密碼現在才跟 GAS 拿（背景進行，按 🙈／複製時大多已經好了）
+    state.detail.secret = item.x ? { username: item.x.username, password: null } : null;
+    state.detail.pw = item.x ? fetchPassword(item) : null;
+    if (state.detail.pw) state.detail.pw.catch(function () {});   // 沒人等的時候失敗也不要報錯（真的要用時 ensurePassword 會處理）
     $('d-user').textContent = item.x ? (item.x.username || '（沒有帳號）') : '（這一筆的帳號密碼解不開）';
     $('d-pass').textContent = '••••••••';
     $('d-url-row').hidden = !item.s.url;
@@ -750,6 +770,30 @@
     openSheet('sheet-detail');
   }
 
+  /** 跟 GAS 拿這一筆的完整密碼並解開 */
+  async function fetchPassword(item) {
+    const res = await api('getSecret', { id: item.id });
+    item.rev = res.rev;
+    if (res.pass) return VC.decryptPart(state.vk, item.id, 'pass', res.pass.iv, res.pass.data);
+    return (await VC.decryptSecret(state.vk, item.id, res.legacy.iv, res.legacy.data)).password || '';   // 還沒轉換的舊格式
+  }
+
+  /** 等完整密碼拿回來（已經拿到就馬上回來）；拿不到回傳 false */
+  async function ensurePassword() {
+    const d = state.detail;
+    if (!d || !d.secret) return false;
+    if (d.secret.password !== null) return true;
+    try {
+      const pw = await d.pw;
+      if (state.detail !== d) return false;   // 等待中已經關掉了
+      d.secret.password = pw;
+      return true;
+    } catch (e) {
+      if (!e.handled) toast('取得密碼失敗：' + (e.message || ''));
+      return false;
+    }
+  }
+
   function clearDetail() {
     clearTimeout(state.revealTimer);
     state.detail = null;
@@ -759,8 +803,15 @@
     if ($('d-countdown-bar')) $('d-countdown-bar').style.width = '100%';
   }
 
-  function toggleReveal() {
+  async function toggleReveal() {
     if (!state.detail || !state.detail.secret) return;
+    if (state.detail.secret.password === null) {
+      $('d-pass').textContent = '取得中…';
+      const ok = await ensurePassword();
+      if (!state.detail) return;
+      $('d-pass').textContent = '••••••••';
+      if (!ok) return;
+    }
     const span = $('d-pass');
     const wrap = $('d-countdown-wrap');
     const bar = $('d-countdown-bar');
@@ -904,9 +955,10 @@
           id: id,
           rev: item ? item.rev : 0,
           summary: toServer(summary),   // 名稱、分類…不加密，直接存在試算表
-          secret: await VC.encryptSecret(state.vk, id, secret)
+          cred: await buildCred(id, secret)   // 帳號、密碼頭尾、完整密碼分開加密
         });
-        const saved = { id: id, rev: res.rev, updatedAt: res.updatedAt, updatedBy: res.updatedBy, s: summary, x: secret };
+        const saved = { id: id, rev: res.rev, updatedAt: res.updatedAt, updatedBy: res.updatedBy, s: summary,
+          x: { username: secret.username, mask: maskPassword(secret.password) } };   // 完整密碼不留著
         state.items = state.items.filter(function (x) { return x.id !== id; }).concat([saved]);
         // 存好後切到這一筆的分類，才看得到剛剛存的（在常用頁修改常用項目就留在常用）
         if (!(state.filterCat === 'fav' && isFavorite(id))) state.filterCat = summary.category;
@@ -1025,8 +1077,19 @@
       toast(added ? '⭐ 已加入常用' : '已從常用移除');
     });
     $('d-copy-user').addEventListener('click', function () { if (state.detail && state.detail.secret) copyText(state.detail.secret.username || ''); });
-    $('d-copy-pass').addEventListener('click', function () { if (state.detail && state.detail.secret) copyText(state.detail.secret.password || ''); });
-    $('d-edit').addEventListener('click', function () { const d = state.detail; if (d && d.secret) openEdit(d.item, d.secret); });
+    $('d-copy-pass').addEventListener('click', function () {
+      const d = state.detail;
+      if (!d || !d.secret) return;
+      // 複製要在按下的當下做（手機瀏覽器規定），密碼還沒拿回來就請他再按一次
+      if (d.secret.password === null) { toast('密碼取得中，請再按一次複製'); ensurePassword(); return; }
+      copyText(d.secret.password || '');
+    });
+    $('d-edit').addEventListener('click', async function () {
+      const d = state.detail;
+      if (!d || !d.secret) return;
+      if (!(await ensurePassword())) return;   // 修改要有完整密碼才能帶進欄位
+      if (state.detail === d) openEdit(d.item, d.secret);
+    });
     $('d-delete').addEventListener('click', onDelete);
     $('d-dup').addEventListener('click', function () { const d = state.detail; if (d) openEdit(null, null, d.item); });
     $('d-url').addEventListener('click', function (ev) {
