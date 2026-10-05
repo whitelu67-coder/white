@@ -355,14 +355,8 @@
       // x：帳號＋密碼頭尾（卡片用）。完整密碼不在這裡，點開明細才跟 GAS 拿
       const item = { id: e.id, rev: e.rev, updatedAt: e.updatedAt, updatedBy: e.updatedBy, s: fromServer(e.summary || {}), x: null };
       try {
-        if (e.user) {
-          item.x = { username: await VC.decryptPart(state.vk, e.id, 'user', e.user.iv, e.user.data),
-                     mask: await VC.decryptPart(state.vk, e.id, 'mask', e.mask.iv, e.mask.data) };
-        } else if (e.legacy) {
-          // 舊格式（帳號＋密碼一起加密）：照樣顯示；修改後按儲存就會存成新格式
-          const old = await VC.decryptSecret(state.vk, e.id, e.legacy.iv, e.legacy.data);
-          item.x = { username: old.username || '', mask: maskPassword(old.password) };
-        }
+        item.x = { username: await VC.decryptPart(state.vk, e.id, 'user', e.user.iv, e.user.data),
+                   mask: await VC.decryptPart(state.vk, e.id, 'mask', e.mask.iv, e.mask.data) };
       } catch (err) { broken++; }
       out.push(item);
     }
@@ -774,8 +768,7 @@
   async function fetchPassword(item) {
     const res = await api('getSecret', { id: item.id });
     item.rev = res.rev;
-    if (res.pass) return VC.decryptPart(state.vk, item.id, 'pass', res.pass.iv, res.pass.data);
-    return (await VC.decryptSecret(state.vk, item.id, res.legacy.iv, res.legacy.data)).password || '';   // 還沒轉換的舊格式
+    return VC.decryptPart(state.vk, item.id, 'pass', res.pass.iv, res.pass.data);
   }
 
   /** 等完整密碼拿回來（已經拿到就馬上回來）；拿不到回傳 false */

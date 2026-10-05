@@ -9,7 +9,6 @@
 //   → 換主密碼只要重新包 VK，不用重新加密所有資料
 //
 // 每一筆的帳號、密碼頭尾、完整密碼分開用 VK 加密（encryptPart）；名稱、分類…不加密（直接存在試算表）
-// encryptSecret／decryptSecret 是舊格式（帳號＋密碼一起加密），只用來把舊資料轉成新格式
 // 每次加密都用新的隨機 IV；並把「這筆的 id」當作附加驗證資料（AAD），
 // 避免有人把 A 筆的密文搬到 B 筆還能解得開。
 // 瀏覽器、Node.js（測試用）都能載入。
@@ -117,24 +116,22 @@
   }
 
   // ============================================================
-  // 帳號密碼加解密（用 VK）
+  // 帳號、密碼加解密（用 VK）
   // ============================================================
 
-  function aadFor(id) {
-    return 'white-vault|' + id + '|secret';
-  }
-
-  /** { username, password } → { iv, data } */
-  async function encryptSecret(key, id, secret) {
+  /**
+   * 分段加密：帳號（user）、密碼頭尾（mask）、完整密碼（pass）各自加密
+   * 附加驗證資料是「id＋哪一段」，三段不能互換、也不能搬到別筆
+   */
+  async function encryptPart(key, id, part, text) {
     const iv = randomBytes(IV_BYTES);
-    const data = await subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode(aadFor(id)) }, key, enc.encode(JSON.stringify(secret)));
+    const data = await subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode('white-vault|' + id + '|' + part) }, key, enc.encode(String(text || '')));
     return { iv: toB64(iv), data: toB64(data) };
   }
 
-  /** 金鑰錯誤、資料被竄改、id 不符都會丟出錯誤 */
-  async function decryptSecret(key, id, iv, data) {
-    const plain = await subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv), additionalData: enc.encode(aadFor(id)) }, key, fromB64(data));
-    return JSON.parse(dec.decode(plain));
+  async function decryptPart(key, id, part, iv, data) {
+    const plain = await subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv), additionalData: enc.encode('white-vault|' + id + '|' + part) }, key, fromB64(data));
+    return dec.decode(plain);
   }
 
   // ============================================================
@@ -176,21 +173,6 @@
     return false;
   }
 
-  /**
-   * 分段加密：帳號（user）、密碼頭尾（mask）、完整密碼（pass）各自加密
-   * 附加驗證資料是「id＋哪一段」，三段不能互換、也不能搬到別筆
-   */
-  async function encryptPart(key, id, part, text) {
-    const iv = randomBytes(IV_BYTES);
-    const data = await subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode('white-vault|' + id + '|' + part) }, key, enc.encode(String(text || '')));
-    return { iv: toB64(iv), data: toB64(data) };
-  }
-
-  async function decryptPart(key, id, part, iv, data) {
-    const plain = await subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv), additionalData: enc.encode('white-vault|' + id + '|' + part) }, key, fromB64(data));
-    return dec.decode(plain);
-  }
-
   const api = {
     PBKDF2_ITERATIONS: PBKDF2_ITERATIONS,
     isSupported: isSupported,
@@ -203,8 +185,6 @@
     wrapVaultKey: wrapVaultKey,
     unwrapVaultKeyRaw: unwrapVaultKeyRaw,
     importVaultKey: importVaultKey,
-    encryptSecret: encryptSecret,
-    decryptSecret: decryptSecret,
     encryptPart: encryptPart,
     decryptPart: decryptPart,
     passwordStrength: passwordStrength,
